@@ -86,7 +86,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const DEFAULT_TEXT_ENCODING = UTF_8;
 
-    const VALID_ENCODINGS = lock( ["ascii", "utf8", UTF_8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
+    const VALID_ENCODINGS = lock( new Set( ["ascii", "utf8", UTF_8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] ) );
 
     function isBufferDefined()
     {
@@ -158,7 +158,7 @@ const { _ud = "undefined", $scope } = constants;
 
     function resolveEncoding( pEncoding )
     {
-        if ( isString( pEncoding ) && VALID_ENCODINGS.includes( pEncoding ) )
+        if ( isString( pEncoding ) && VALID_ENCODINGS.has( pEncoding ) )
         {
             return pEncoding;
         }
@@ -242,13 +242,13 @@ const { _ud = "undefined", $scope } = constants;
                 isBuffer
             };
 
-        objectEntries( mod ).forEach( ( [key, value] ) =>
-                                      {
-                                          if ( _ud === typeof scp[key] )
-                                          {
-                                              scp[key] = value;
-                                          }
-                                      } );
+        Object.entries( mod ).forEach( ( [key, value] ) =>
+                                       {
+                                           if ( _ud === typeof scp[key] )
+                                           {
+                                               scp[key] = value;
+                                           }
+                                       } );
     }
     else
     {

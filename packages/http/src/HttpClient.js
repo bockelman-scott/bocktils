@@ -925,7 +925,7 @@ const { _ud = "undefined", $scope } = constants;
             const url = this.resolveUrl( config?.url || pConfig?.url || config, config );
             const body = this.resolveBody( config?.body || config?.data || pConfig?.body || pConfig?.data );
 
-            return await this.sendRequest( method, url, config, ([VERBS.POST, VERBS.PUT, VERBS.PATCH, VERBS.DELETE].includes( method ) ? body : undefined) );
+            return await this.sendRequest( method, url, config, (HttpVerb.METHODS_ALLOW_BODY.includes( ucase( method ) ) ? body : undefined) );
         }
 
         async sendGetRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )

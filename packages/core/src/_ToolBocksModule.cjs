@@ -349,6 +349,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             _types = [_ud, _obj, _fun, _str, _bool, _num, _big, _symbol],
             _validTypes = [_obj, _fun, _str, _bool, _num, _big, _symbol],
+            _primitiveTypes = [_str, _bool, _num, _big, _symbol],
+            _nonObjectTypes = [_fun, _str, _bool, _num, _big, _symbol],
 
             _mt_str = "",
             _mt = _mt_str,
@@ -470,6 +472,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const PRIMITIVE_WRAPPER_TYPE_NAMES = PRIMITIVE_WRAPPER_TYPES.map( e => e.name || functionToString.call( e ) );
 
+    const TYPED_ARRAYS = freeze( [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array] );
 
     /**
      * GLOBAL_TYPES is an array containing all standard JavaScript global object types and structures
@@ -497,13 +500,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * as well as the contents of `ERROR_TYPES` and `PRIMITIVE_WRAPPER_TYPES`
      *
      */
-    const GLOBAL_TYPES = [Array, Function, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...ERROR_TYPES, ...PRIMITIVE_WRAPPER_TYPES];
+    const GLOBAL_TYPES = [Array, Function, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...ERROR_TYPES, ...PRIMITIVE_WRAPPER_TYPES, ...TYPED_ARRAYS];
 
     const GLOBAL_TYPE_PROTOTYPES = GLOBAL_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) ).filter( e => null !== e && e !== Object );
 
     const GLOBAL_TYPE_NAMES = GLOBAL_TYPES.map( e => e.name || functionToString.call( e ) );
 
-    const TYPED_ARRAYS = freeze( [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array] );
+    const STANDARD_CONSTRUCTOR_NAMES = new Set( GLOBAL_TYPE_NAMES );
 
     /**
      * A constant array of the property names of properties that should not be serialized or persisted
@@ -3160,10 +3163,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @return {Promise<void>} A promise that resolves after the specified delay.
      */
-    function sleep( pMilliseconds )
+    function sleep( pMilliseconds = 32 )
     {
         // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
-        return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
+        return new Promise( resolve => setTimeout( resolve, parseInt( pMilliseconds ) ) );
     }
 
     /**
@@ -3182,9 +3185,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @return {Promise<void>} A promise that resolves after the specified delay.
      */
-    function doze( pMilliseconds )
+    function doze( pMilliseconds = 256 )
     {
-        const millis = pMilliseconds + ((Math.random() + 0.1) * pMilliseconds);
+        const millis = parseInt( pMilliseconds ) + ((Math.random() + 0.1) * parseInt( pMilliseconds ));
         return sleep( Math.floor( millis ) );
     }
 
@@ -4793,8 +4796,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * Returns true if the specified value is an object literal.<br>
-     * An object literal is an object or array
-     * that is not constructed as an instance of a class or built-in type.<br>
+     * An object literal is an object or array not constructed as an instance of a class or built-in type.<br>
      * <br>
      *
      * <br>
@@ -4807,30 +4809,53 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function isObjectLiteral( pObject,
                               pOptions = DEFAULT_IS_LITERAL_OPTIONS,
-                              pVisited = new Set(),
+                              pVisited = new WeakSet(),
                               pStack = [],
                               pDepth = 0 )
     {
-        const options = { ...DEFAULT_IS_LITERAL_OPTIONS, ...(pOptions || {}) };
+        let isLiteral = isNonNullObj( pObject );
 
-        const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth, options );
-
-        let isLiteral = false;
+        if ( isNull( pObject ) || _nonObjectTypes.includes( typeof pObject ) )
+        {
+            return false;
+        }
 
         if ( isNonNullObj( pObject ) )
         {
-            const matchedTypes = GLOBAL_TYPES.filter( e => pObject instanceof e );
+            const proto = Object.getPrototypeOf( pObject );
 
-            if ( $ln( matchedTypes ) > 0 )
+            if ( isNull( proto ) )
+            {
+                return true;
+            }
+
+            const ctor = proto.constructor;
+
+            if ( isFunc( ctor ) && (ctor.prototype === proto || ctor === proto) && STANDARD_CONSTRUCTOR_NAMES.has( ctor.name ) )
             {
                 return false;
             }
 
-            const proto = Object.getPrototypeOf( pObject );
+            const options = isBool( pOptions ) ? { recursive: pOptions } : isNonNullObj( pOptions ) ? (pOptions ?? DEFAULT_IS_LITERAL_OPTIONS) : DEFAULT_IS_LITERAL_OPTIONS;
+
+            const recursive = options?.recursive;
+
+            const
+                {
+                    visited,
+                    stack,
+                    depth
+                } = recursive ? initializeRecursionArgs( pVisited, pStack, pDepth, options ) :
+                    {
+                        visited: new WeakSet(),
+                        stack: [],
+                        depth: 0
+                    };
+
 
             const hasUserDefinedConstructor = hasCustomConstructor( pObject );
 
-            isLiteral = (isNull( proto ) || !hasUserDefinedConstructor);
+            isLiteral = isLiteral && (isNull( proto ) || !hasUserDefinedConstructor);
 
             if ( isInfiniteLoop( pObject, visited, stack, depth ) )
             {
@@ -4839,31 +4864,68 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( isArray( pObject ) )
             {
-                isLiteral = attempt( () => pObject.every( (( e, i ) => isNull( e ) || isPrimitive( e ) || isObjectLiteral( e, options, visited, [...stack, String( i )] )) ) );
+                const localStack = [...stack];
+
+                for( let i = 0, n = pObject.length; i < n; i++ )
+                {
+                    const e = pObject[i];
+
+                    if ( isNull( e ) || isPrimitive( e ) )
+                    {
+                        continue;
+                    }
+
+                    localStack.push( String( i ) );
+
+                    isLiteral = isNull( e ) || !isObj( e ) || isObjectLiteral( e, options, visited, localStack );
+
+                    localStack.pop();
+
+                    if ( !isLiteral )
+                    {
+                        break;
+                    }
+                }
 
                 visited.add( pObject );
 
                 return isLiteral;
             }
 
-            if ( isLiteral && options?.recursive )
+            if ( isLiteral && recursive )
             {
-                const entries = isNonNullObj( pObject ) ? objectEntries( pObject ) : isArray( pObject ) ? pObject.map( ( e, i ) => [String( i ), e] ) : [];
+                const entries = isNonNullObj( pObject ) ? Object.entries( pObject ) ?? objectEntries( pObject ) : isArray( pObject ) ? pObject.map( ( e, i ) => [String( i ), e] ) : [];
 
-                while ( entries.length > 0 && isLiteral )
+                const localStack = [...stack];
+
+                for( let entry of entries )
                 {
-                    const entry = entries.shift();
+                    if ( !isLiteral )
+                    {
+                        break;
+                    }
 
                     if ( entry )
                     {
                         const value = entry?.value || entry[1];
 
-                        isLiteral = isNull( value ) || isPrimitive( value ) || isObjectLiteral( value, options, visited, [...stack, (entry.key || entry[0])] );
+                        isLiteral = isNull( value ) || isPrimitive( value );
+
+                        if ( isLiteral )
+                        {
+                            continue;
+                        }
+
+                        localStack.push( (entry.key || entry[0]) );
+
+                        isLiteral = isObjectLiteral( value, options, visited, localStack );
 
                         if ( isNonNullObj( value ) )
                         {
                             visited.add( value );
                         }
+
+                        localStack.pop();
                     }
                 }
             }

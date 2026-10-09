@@ -88,6 +88,9 @@
         }
     }
 
+    const NUMERIC_TYPES = [_num, _big];
+    const KEY_TYPES = [_str, _symbol, ...NUMERIC_TYPES];
+
     const createKey = function( pKey )
     {
         if ( isNull( pKey ) )
@@ -95,9 +98,10 @@
             throw new CacheException( `null as a cache key is not supported`, { detail: pKey }, pKey );
         }
 
-        if ( (isString( pKey ) && !isBlank( pKey )) || [_num, _big, _symbol].includes( typeof pKey ) )
+        if ( (isString( pKey ) && !isBlank( pKey )) || KEY_TYPES.includes( typeof pKey ) )
         {
-            return (isNumber( pKey ) && asInt( pKey ) > 0) ? asInt( pKey ) : asString( pKey, true );
+            const key = (isNumber( pKey ) && asInt( pKey ) > 0) ? asInt( pKey ) : asString( pKey, true );
+            return isBlank( asString( key ) ) ? `~~no~match~~` : key;
         }
 
         if ( isFunction( pKey ) )
@@ -180,7 +184,7 @@
                     return attempt( () => asJson( toObjectLiteral( value ) ) ) ?? asString( value );
                 }
             }
-            else if ( [_num, _big].includes( typeof val ) )
+            else if ( NUMERIC_TYPES.includes( typeof val ) )
             {
                 if ( isBigInt( val ) )
                 {
@@ -413,7 +417,7 @@
 
         isSupportedKey( pKey )
         {
-            return !isNull( pKey ) && [_str, _num, _big, _symbol].includes( typeof pKey ) && !isBlank( asString( pKey, true ) );
+            return !isNull( pKey ) && KEY_TYPES.includes( typeof pKey ) && !isBlank( asString( pKey, true ) );
         }
 
         /**
@@ -909,7 +913,7 @@
 
         isSupportedKey( pKey )
         {
-            return isFunction( this.#map?.isSupportedKey ) ? this.#map.isSupportedKey( pKey ) : ([_str, _num, _big, _symbol].includes( typeof pKey ) && !isBlank( asString( pKey, true ) ));
+            return isFunction( this.#map?.isSupportedKey ) ? this.#map.isSupportedKey( pKey ) : (KEY_TYPES.includes( typeof pKey ) && !isBlank( asString( pKey, true ) ));
         }
 
         cacheValue( pKey, pValue, pTimeToLive = -1 )

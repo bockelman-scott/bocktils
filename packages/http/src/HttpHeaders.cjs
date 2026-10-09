@@ -304,7 +304,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let value = pValue;
 
-        if ( pValue instanceof HttpHeader || (isPopulatedObject( pValue ) && !isBlank( pValue.value )) )
+        if ( pValue instanceof HttpHeader || (isNonNullObject( pValue ) && !isBlank( pValue?.value )) )
         {
             key = pValue.name || key;
             value = pValue.value || (pKey instanceof HttpHeader ? pKey.value || pKey.name : key);
@@ -1017,9 +1017,11 @@ const { _ud = "undefined", $scope } = constants;
 
     function resolveHeaderOptions( pOptions )
     {
-        let options = isNull( pOptions ) || !isCompatibleHeadersObject( pOptions ) ? {} : (isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ));
+        let options = (isNull( pOptions ) || !isCompatibleHeadersObject( pOptions )) ?
+                      ({}) :
+                      (isArray( pOptions ) ? asArray( pOptions ?? [] ) : asObject( pOptions ?? {} ));
 
-        let entries = (isFunction( options?.entries ) ? [...(options.entries() || [])] : objectEntries( options ));
+        let entries = (isFunction( options?.entries ) ? (options.entries() ?? []) : Object.entries( options ) ?? objectEntries( options ));
 
         if ( entries && $ln( entries ) > 0 )
         {
@@ -1039,7 +1041,7 @@ const { _ud = "undefined", $scope } = constants;
                              }
                          } );
 
-        return lock( toObjectLiteral( object ) );
+        return lock( object );
     }
 
     /**
@@ -1086,7 +1088,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const logger = ToolBocksModule.resolveLogger( toolBocksModule?.logger, console );
 
-            const options = [...(asArray( pOptions ) || [])].filter( isCompatibleHeadersObject );
+            const options = (asArray( pOptions ) || []).filter( isCompatibleHeadersObject );
 
             function validateHeader( pKey, pValue )
             {
@@ -1103,7 +1105,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 for( let obj of options )
                 {
-                    let entries = (isFunction( obj?.entries ) ? [...(obj.entries() || [])] : objectEntries( obj ));
+                    let entries = (isFunction( obj?.entries ) ? (obj.entries() || []) : Object.entries( obj ));
 
                     if ( entries && $ln( entries ) > 0 )
                     {
@@ -1521,7 +1523,7 @@ const { _ud = "undefined", $scope } = constants;
 
                     let obj = toObjectLiteral( httpHeaders );
 
-                    let entries = objectEntries( obj );
+                    let entries = Object.entries( obj ) ?? objectEntries( obj );
 
                     if ( entries && $ln( entries ) )
                     {
@@ -1534,7 +1536,7 @@ const { _ud = "undefined", $scope } = constants;
                                 continue;
                             }
 
-                            const value = asString( ObjectEntry.getValue( entry ) );
+                            const value = ObjectEntry.getValue( entry );
 
                             if ( isFunction( value ) )
                             {
@@ -1545,13 +1547,13 @@ const { _ud = "undefined", $scope } = constants;
 
                             if ( rule && rule.isValid() )
                             {
-                                attempt( () => rule.apply( headers, value ) );
+                                attempt( () => rule.apply( headers, asString( value ) ) );
                             }
                             else
                             {
                                 let existing = readScalarProperty( headers, _str, name );
 
-                                if ( !["api_key", "Authorization"].includes( name ) || isNull( existing ) || isBlank( existing ) )
+                                if ( isNull( existing ) || isBlank( existing ) || !["api_key", "Authorization"].includes( name ) )
                                 {
                                     setProperty( headers, name, asString( value || existing ) );
                                 }

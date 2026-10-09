@@ -135,6 +135,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             _mt_str,
             _mt = _mt_str,
 
+            _spc,
+
             _dblqt,
             _sglqt,
 
@@ -166,6 +168,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             PRIMITIVE_WRAPPER_TYPES,
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
+            STANDARD_CONSTRUCTOR_NAMES,
 
             RX_BIG_INT = /^[\d_]+n$/
         } = constants;
@@ -2672,10 +2675,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                                             date.getTime() >= MIN_DATE_TIME &&
                                             date.getTime() <= MAX_DATE_TIME;
 
-    const isDateString = ( pStr ) => attempt( () => isString( pStr ) && !isBlankString( pStr ) ? isValidDateInstance( new Date( pStr.trim() ) ) : isNumber( pStr ) ? isValidDateInstance( new Date( pStr ) ) : isValidDateInstance( pStr ) );
+    const isDateString = ( pStr ) => attempt( () => isString( pStr ) && !isBlankString( pStr ) ? isValidDateInstance( new Date( pStr.trim().replaceAll( /[\s\u00A0\u202F]/g, _spc ) ) ) : isNumber( pStr ) ? isValidDateInstance( new Date( pStr ) ) : isValidDateInstance( pStr ) );
 
     const canBeDateTime = function( pObj )
     {
+        if ( isString( pObj ) )
+        {
+            return isDateString( pObj );
+        }
+
         let date = (isObject( pObj ) && pObj instanceof Number && !isFloat( pObj.valueOf() ))
                    ? new Date( pObj.valueOf() )
                    : (isNumber( pObj ) && !isFloat( pObj ))
@@ -2715,7 +2723,10 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return attempt( () => (dateParser.parse || dateParser.parseDate || dateParser).call( dateParser, input ) );
         }
 
-        let date = new Date( input );
+        const date = isString( input ) ?
+                     (isNumeric( input ) ? new Date( parseInt( input ) ) :
+                      attempt( () => new Date( input.replaceAll( /[\s\u00A0\u202F]/g, _spc ).trim() ) )) :
+                     attempt( () => new Date( input ) );
 
         if ( isValidDateInstance( date ) )
         {
@@ -2731,7 +2742,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( isString( pObj ) || pObj instanceof String )
         {
-            date = parseDate( pObj, pDateParser );
+            date = attempt( () => parseDate( _toString( pObj ).replaceAll( /[\s\u00A0\u202F]/g, _spc ).trim(), pDateParser ) );
             return (isNull( date ) || !isValidDateInstance( date ) ? attempt( () => new Date( pObj ) ) : date);
         }
 

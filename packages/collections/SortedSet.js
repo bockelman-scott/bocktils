@@ -740,14 +740,18 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( _obj === setType )
         {
-            let classNames = unique( arr.map( e => getClassName( e ) ) ).filter( e => !isNull( e ) && !isBlank( e ) && !["Object", "Array"].includes( e ) );
+            let GENERIC_CLASSES = [Object, Array];
+            let EXCLUDED_CLASS_NAMES = ["Object", "Array"];
+
+            let classNames = unique( arr.map( e => getClassName( e ) ) ).filter( e => !isNull( e ) && !isBlank( e ) && !EXCLUDED_CLASS_NAMES.includes( e ) );
+
             if ( 1 === $ln( classNames ) )
             {
-                let classes = unique( arr.map( e => getClass( e, false ) ) ).filter( e => !isNull( e ) && isClass( e, false ) && ![Object, Array].includes( e ) );
+                let classes = unique( arr.map( e => getClass( e, false ) ) ).filter( e => !isNull( e ) && isClass( e, false ) && !GENERIC_CLASSES.includes( e ) );
                 if ( 1 === $ln( classes ) )
                 {
                     setType = classes.find( e => !isNull( e ) && isClass( e, false ) ) ?? getClass( arr[0], false );
-                    if ( [Object, Array].includes( setType ) )
+                    if ( GENERIC_CLASSES.includes( setType ) )
                     {
                         setType = _obj;
                     }

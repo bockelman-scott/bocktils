@@ -146,17 +146,18 @@ const { _ud = "undefined", $scope } = constants;
      * - CONNECT: Represents an HTTP CONNECT request, typically used to establish a tunnel to the server.<br>
      * - TRACE: Represents an HTTP TRACE request, typically used for testing and diagnostic purposes.<br>
      */
-    const VERBS = {
-        GET: "GET", /* 0 */
-        POST: "POST", /* 1 */
-        PUT: "PUT", /* 2 */
-        PATCH: "PATCH", /* 3 */
-        HEAD: "HEAD", /* 4 */
-        OPTIONS: "OPTIONS", /* 6 */
-        DELETE: "DELETE", /* 7 */
-        CONNECT: "CONNECT", /* 8 */
-        TRACE: "TRACE" /* 9 */
-    };
+    const VERBS =
+        {
+            GET: "GET", /* 0 */
+            POST: "POST", /* 1 */
+            PUT: "PUT", /* 2 */
+            PATCH: "PATCH", /* 3 */
+            HEAD: "HEAD", /* 4 */
+            OPTIONS: "OPTIONS", /* 6 */
+            DELETE: "DELETE", /* 7 */
+            CONNECT: "CONNECT", /* 8 */
+            TRACE: "TRACE" /* 9 */
+        };
 
     VERBS.indexOf = function( pVerb )
     {
@@ -172,6 +173,8 @@ const { _ud = "undefined", $scope } = constants;
     {
         return Object.keys( VERBS );
     };
+
+    const HTTP_VERBS = VERBS.values() ?? VERBS.keys();
 
     class HttpError extends __Error
     {
@@ -205,6 +208,10 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    const METHODS_REQUIRE_BODY = ["POST", "PUT", "PATCH"];
+    const METHODS_FORBID_BODY = ["GET", "HEAD", "OPTIONS", "TRACE"];
+    const METHODS_ALLOW_BODY = [...METHODS_REQUIRE_BODY, "DELETE"];
+
     /**
      * Represents an HTTP verb and provides utility methods related to it.
      * @class
@@ -234,17 +241,17 @@ const { _ud = "undefined", $scope } = constants;
          */
         get requiresBody()
         {
-            return ["POST", "PUT", "PATCH"].includes( ucase( this.#verb ) );
+            return METHODS_REQUIRE_BODY.includes( ucase( this.#verb ) );
         }
 
         get allowsBody()
         {
-            return this.requiresBody || "DELETE" === ucase( this.#verb );
+            return this.requiresBody || METHODS_ALLOW_BODY.includes( ucase( this.#verb ) );
         }
 
         get forbidsBody()
         {
-            return ["GET", "HEAD", "OPTIONS", "TRACE"].includes( ucase( this.#verb ) );
+            return METHODS_FORBID_BODY.includes( ucase( this.#verb ) );
         }
 
         toString()
@@ -270,6 +277,10 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    HttpVerb.METHODS_REQUIRE_BODY = METHODS_REQUIRE_BODY;
+    HttpVerb.METHODS_FORBID_BODY = METHODS_FORBID_BODY;
+    HttpVerb.METHODS_ALLOW_BODY = METHODS_ALLOW_BODY;
+
     Object.entries( VERBS ).forEach( ( [key, value] ) =>
                                      {
                                          HttpVerb[ucase( key )] = new HttpVerb( value );
@@ -277,15 +288,13 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpVerb.resolveHttpMethod = function( pMethod = VERBS.GET, pConfig = {} )
     {
-        const verbs = Object.values( VERBS ).map( ucase );
-
         if ( isString( pMethod ) && !isBlank( pMethod ) )
         {
             let method = ucase( asString( pMethod, true ) );
 
-            if ( verbs.includes( method ) )
+            if ( HTTP_VERBS.includes( method ) )
             {
-                return method;
+                return asString( method, true );
             }
 
             if ( isJson( pMethod ) )
@@ -296,9 +305,9 @@ const { _ud = "undefined", $scope } = constants;
 
                 method = HttpVerb.resolveHttpMethod( candidate, pConfig );
 
-                if ( isString( method ) && verbs.includes( ucase( asString( method, true ) ) ) )
+                if ( isString( method ) && HTTP_VERBS.includes( ucase( asString( method, true ) ) ) )
                 {
-                    return method;
+                    return asString( method, true );
                 }
             }
         }
@@ -309,18 +318,18 @@ const { _ud = "undefined", $scope } = constants;
             {
                 let candidate = HttpVerb.resolveHttpMethod( pMethod?.name || pMethod?.verb, pConfig );
 
-                if ( isString( candidate ) && verbs.includes( ucase( asString( candidate, true ) ) ) )
+                if ( isString( candidate ) && HTTP_VERBS.includes( ucase( asString( candidate, true ) ) ) )
                 {
-                    return candidate;
+                    return asString( candidate, true );
                 }
             }
             else
             {
                 let candidate = HttpVerb.resolveHttpMethod( pMethod?.method, pConfig );
 
-                if ( isString( candidate ) && verbs.includes( ucase( asString( candidate, true ) ) ) )
+                if ( isString( candidate ) && HTTP_VERBS.includes( ucase( asString( candidate, true ) ) ) )
                 {
-                    return candidate;
+                    return asString( candidate, true );
                 }
             }
         }
@@ -329,13 +338,13 @@ const { _ud = "undefined", $scope } = constants;
         {
             const index = asInt( pMethod );
 
-            if ( index >= 0 && index < $ln( verbs ) )
+            if ( index >= 0 && index < $ln( HTTP_VERBS ) )
             {
-                let candidate = verbs[index];
+                let candidate = HTTP_VERBS[index];
 
-                if ( isString( candidate ) && verbs.includes( ucase( asString( candidate, true ) ) ) )
+                if ( isString( candidate ) && HTTP_VERBS.includes( ucase( asString( candidate, true ) ) ) )
                 {
-                    return candidate;
+                    return asString( candidate, true );
                 }
             }
         }
@@ -2283,6 +2292,10 @@ const { _ud = "undefined", $scope } = constants;
 
     let mod =
         {
+            HTTP_VERBS,
+            METHODS_REQUIRE_BODY,
+            METHODS_ALLOW_BODY,
+            METHODS_FORBID_BODY,
             ENCODING_TYPE_EXPRESSIONS,
             EXTENSIONS: lock( EXTENSIONS ),
             TYPES_BY_EXTENSION: lock( TYPES_BY_EXTENSION ),

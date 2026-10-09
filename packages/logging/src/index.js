@@ -1541,7 +1541,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 this.#levels.push( LOG, INFO, WARN, ERROR );
             }
 
-            this.#levels = asArray( this.#levels ).flat().map( e => lcase( asString( e, true ) ) ).filter( e => [LOG, INFO, WARN, ERROR, DEBUG, TRACE].includes( e ) );
+            this.#levels = asArray( this.#levels ).flat().map( e => lcase( asString( e, true ) ) ).filter( e => SIMPLE_LOGGER_LEVELS.includes( e ) );
 
             this.#addFormatting = !!pAddFormatting;
             this.#logEmptyMessages = !!pLogEmptyMessages;

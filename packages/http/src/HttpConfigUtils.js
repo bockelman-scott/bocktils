@@ -193,6 +193,7 @@ const { _ud = "undefined", $scope } = constants;
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const
         {
+            HTTP_VERBS,
             ENCODING_TYPE_EXPRESSIONS,
             HTTP_HEADERS,
             CONTENT_TYPES,
@@ -411,7 +412,7 @@ const { _ud = "undefined", $scope } = constants;
                 }
             }
 
-            return objectValues( VERBS ).includes( ucase( method ) );
+            return HTTP_VERBS.includes( ucase( method ) );
         }
 
         return false;
