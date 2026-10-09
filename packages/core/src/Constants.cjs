@@ -319,7 +319,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
             GLOBAL_TYPE_NAMES = lock( ["Object", "Array", "Function", "String", "Number", "Boolean", "BigInt", "Date", "RegExp", "Symbol", "Math", "JSON", "Map", "Set", "Promise", "ArrayBuffer", "SharedArrayBuffer", "DataView", "WeakMap", "WeakRef", "WeakSet"] ),
 
-            BUILTIN_TYPE_NAMES = lock( [].concat( ...TYPED_ARRAY_NAMES ).concat( ...ERROR_TYPE_NAMES ).concat( ...GLOBAL_TYPE_NAMES ) ),
+            BUILTIN_TYPE_NAMES = lock( [].concat( ...GLOBAL_TYPE_NAMES ) ).concat( ...TYPED_ARRAY_NAMES ).concat( ...ERROR_TYPE_NAMES ),
 
             SERIALIZABLE_TYPES = lock( [Object, String, Number, Boolean, Array, Date, RegExp, Error] ),
 
@@ -340,42 +340,44 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             ignore = no_op,
 
             RESERVED_WORDS = lock(
-                ["break",
-                 "case",
-                 "catch",
-                 "class",
-                 "const",
-                 "continue",
-                 "debugger",
-                 "default",
-                 "delete",
-                 "do",
-                 "else",
-                 "export",
-                 "extends",
-                 "false",
-                 "finally",
-                 "for",
-                 "function",
-                 "if",
-                 "import",
-                 "in",
-                 "interface",
-                 "instanceof",
-                 "new",
-                 "null",
-                 "return",
-                 "super",
-                 "switch",
-                 "this",
-                 "throw",
-                 "true",
-                 "try",
-                 "typeof",
-                 "var",
-                 "void",
-                 "while",
-                 "with"] ),
+                [
+                    "break",
+                    "case",
+                    "catch",
+                    "class",
+                    "const",
+                    "continue",
+                    "debugger",
+                    "default",
+                    "delete",
+                    "do",
+                    "else",
+                    "export",
+                    "extends",
+                    "false",
+                    "finally",
+                    "for",
+                    "function",
+                    "if",
+                    "import",
+                    "in",
+                    "interface",
+                    "instanceof",
+                    "new",
+                    "null",
+                    "return",
+                    "super",
+                    "switch",
+                    "this",
+                    "throw",
+                    "true",
+                    "try",
+                    "typeof",
+                    "var",
+                    "void",
+                    "while",
+                    "with"
+                ] ),
             clamp = ( pNum, pMin, pMax ) => Math.min( Math.max( pNum, pMin ), pMax ),
             functionToString = Function.prototype.toString,
             funcName = function( pFunction )
@@ -385,6 +387,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             MESSAGES_LOCALE = lock( getMessagesLocale() ),
             MESSAGES_LOCALE_CODE = getMessagesLocaleString() || MESSAGES_LOCALE?.baseName
         } = (moduleUtils || $scope() || {});
+
+    const STANDARD_CONSTRUCTOR_NAMES = new Set( [...BUILTIN_TYPE_NAMES].shift() );
 
     /**
      * Represents a set of time durations in milliseconds.
@@ -1937,6 +1941,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#BUILTIN_TYPE_NAMES
              */
             BUILTIN_TYPE_NAMES,
+
+            STANDARD_CONSTRUCTOR_NAMES,
 
             PRIMITIVE_TYPES,
 
