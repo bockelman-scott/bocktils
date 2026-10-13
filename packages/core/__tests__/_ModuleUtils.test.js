@@ -93,36 +93,39 @@ const
         compareFloats,
         compareBooleans,
         compareSymbols,
-        compare
+        compare,
+        $ln,
+        isFlatObj
     } = moduleUtils;
 
-let {
-    isStr,
-    isFunc,
-    isObj,
-    isArray,
-    isDate,
-    isRegExp,
-    isNum,
-    isBig,
-    isBool,
-    isSymbol,
-    isNull,
-    isUndefined,
-    isPrimitive,
-    isThenable,
-    isPromise,
-    isError,
-    isAsyncFunction,
-    isMap,
-    isSet,
-    isObjectLiteral,
-    isClass,
-    isClassInstance,
-    isGlobalType,
-    isLogger,
-    isVisitor,
-} = TYPES_CHECKS;
+let
+    {
+        isStr,
+        isFunc,
+        isObj,
+        isArray,
+        isDate,
+        isRegExp,
+        isNum,
+        isBig,
+        isBool,
+        isSymbol,
+        isNull,
+        isUndefined,
+        isPrimitive,
+        isThenable,
+        isPromise,
+        isError,
+        isAsyncFunction,
+        isMap,
+        isSet,
+        isObjectLiteral,
+        isClass,
+        isClassInstance,
+        isGlobalType,
+        isLogger,
+        isVisitor,
+    } = TYPES_CHECKS;
 
 class TestClass
 {
@@ -432,6 +435,42 @@ describe( "Sanity-check", () =>
         expect( typeof moduleUtilsClasses?.PromiseResult ).toBe( "function" );
 
         console.log( "Sanity-check passed." );
+    } );
+} );
+
+describe( "Array and Object Accessors", () =>
+{
+    test( "$ln returns the length of a string or array", () =>
+    {
+        let s = "abcDEFg";
+        let arr = ["a", "b", "c"];
+
+        expect( $ln( s ) ).toEqual( 7 );
+        expect( $ln( arr ) ).toEqual( 3 );
+    } );
+
+    test( "$ln returns the length of anything with a size or length", () =>
+    {
+        const obj = { "A": 1, b: 2, c: 3 };
+
+        const map = new Map();
+        map.set( "a", 1 );
+        map.set( "b", 3 );
+        map.set( "c", 5 );
+
+        const func = function( pArg1, pArg2 )
+        {
+            return [pArg1, pArg2].filter( e => null != e );
+        };
+
+        expect( $ln( obj, true ) ).toEqual( 3 );
+
+        expect( $ln( map ) ).toEqual( 3 );
+
+        expect( $ln( func ) ).toEqual( 2 );
+
+        expect( $ln( func() ) ).toEqual( 0 );
+
     } );
 } );
 
@@ -1708,6 +1747,51 @@ describe( "isObjectLiteral", () =>
     } );
 } );
 
+describe( "isFlatObj", () =>
+{
+    const notFlatObj =
+        {
+            a: 1,
+            b:
+                {
+                    a: 11,
+                    b: 12
+                }
+        };
+
+    const notFlatObj2 =
+        {
+            a: 1,
+            b: [1, 2, 3]
+        };
+
+
+    test( "isFlatObj( {} } is true", () =>
+    {
+        expect( isFlatObj( {} ) ).toBe( true );
+    } );
+
+    test( "isFlatObj( {a:1, b:2, c:3} } is true", () =>
+    {
+        expect( isFlatObj( { a: 1, b: 2, c: 3 } ) ).toBe( true );
+    } );
+
+    test( "isFlatObj( {a:1, b:[], c:{}} } is true", () =>
+    {
+        expect( isFlatObj( { a: 1, b: [], c: {} } ) ).toBe( true );
+    } );
+
+    test( "isFlatObj( notFlatObj } is false", () =>
+    {
+        expect( isFlatObj( notFlatObj ) ).toBe( false );
+    } );
+
+    test( "isFlatObj( notFlatObj2 } is false", () =>
+    {
+        expect( isFlatObj( notFlatObj2 ) ).toBe( false );
+    } );
+
+} );
 
 describe( "detectCycles prevents infinite recursion", () =>
 {

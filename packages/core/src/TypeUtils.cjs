@@ -100,6 +100,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             attemptSilent,
             detectCycles,
 
+            isNonNullObj,
+            isFlatObj,
             isObjectLiteral,
             toNodePathArray,
             getProperty,
@@ -749,6 +751,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      * @alias module:TypeUtils.isCustomObject
      */
     const isCustomObject = ( pObj ) => isNonNullObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object) && !isPrimitiveWrapper( pObj );
+
+    const isFlatObject = ( pObj ) => isNonNullObject( pObj ) && isFlatObj( pObj );
 
     const isWeakRef = ( pObj ) => isNonNullObject( pObj ) && (pObj instanceof WeakRef || isFunction( pObj?.deref ));
 
@@ -1677,7 +1681,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      *
      * @alias module:TypeUtils.isBoolean
      */
-    const isBoolean = ( pValue ) => ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || pValue instanceof Boolean;
+    const isBoolean = ( pValue ) => ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || (isNonNullObject( pValue ) && pValue instanceof Boolean);
 
     const isBoolCompatible = ( pValue ) => isBoolean( pValue ) || _booleanStrings.includes( String( _toString( pValue ) ).trim().toLowerCase() );
 
@@ -7137,6 +7141,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             isObject,
             isCustomObject,
             isNonNullObject,
+            isFlatObject,
             isWeakRef,
             isNullOrNaN,
             isValidObject,

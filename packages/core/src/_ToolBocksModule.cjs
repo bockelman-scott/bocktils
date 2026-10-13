@@ -1154,7 +1154,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {number}
      */
-    const $ln = ( pVal, pStrict = false ) => !pStrict ? parseInt( pVal?.length || pVal?.size || 0 ) : (isArray( pVal ) || isSet( pVal ) || isStr( pVal ) || isMap( pVal ) || isFunc( pVal )) ? parseInt( pVal?.length || pVal?.size || 0 ) : -1;
+    const $ln = ( pVal, pStrict = false ) => !pStrict ? parseInt( pVal?.length || pVal?.size || 0 ) : (isArray( pVal ) || isSet( pVal ) || isStr( pVal ) || isMap( pVal ) || isFunc( pVal )) ? parseInt( pVal?.length || pVal?.size || 0 ) : isNonNullObj( pVal ) ? Object.keys( pVal ?? {} ).length : -1;
 
     /**
      * Converts the input into a string representation.
@@ -1245,6 +1245,54 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return 0.0;
     };
 
+
+    const _strToGraphemeArr = function( pStr )
+    {
+        const str = _asStr( pStr );
+        const segmenter = new Intl.Segmenter( ["en", "es", "de"], { granularity: "grapheme" } );
+        return [...segmenter.segment( str )].map( s => s.segment );
+    };
+
+    const $xLn = ( pVal, pOptions = { grapheme_aware: false, include_symbols: false } ) =>
+    {
+        const options =
+            {
+                ...{ grapheme_aware: false, include_symbols: false },
+                ...(pOptions ?? {})
+            };
+
+        if ( isNonNullObj( pVal ) || isArray( pVal ) )
+        {
+            const value = dereference( pVal );
+
+            if ( isNum( value?.length ) || isFunc( value ) )
+            {
+                return value.length;
+            }
+
+            if ( isNum( value?.size ) )
+            {
+                return value.size;
+            }
+
+            if ( isNonNullObj( value ) )
+            {
+                if ( isFunc( value?.size ) )
+                {
+                    return value.size() || Object.keys( value ).length;
+                }
+                return options.include_symbols ? Reflect.ownKeys( value ).length : Object.keys( value ).length;
+            }
+        }
+        else if ( isString( pVal ) )
+        {
+            const val = options.grapheme_aware ? _strToGraphemeArr( pVal ) : [...(String( pVal ))];
+            return $xLn( val );
+        }
+
+        return 0;
+    };
+
     /**
      * Returns the Nth element of a collection,
      * the Nth character of a string,
@@ -1257,7 +1305,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const arr = (isArray( pArr ) || (_str === typeof pArr)) ? pArr : (isFunc( pArr[Symbol.iterator] ) ? [...(pArr || [])] : isObj( pArr ) ? Object.values( pArr ) : [pArr]);
 
-        const length = $ln( arr );
+        const length = $xLn( arr );
 
         let idx = _asInt( pIdx );
 
@@ -1301,6 +1349,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const clamp = ( pNum, pMin, pMax ) => isNum( pNum ) ? Math.min( Math.max( pNum, pMin ), pMax ) : pNum;
 
+    /**
+     * Returns true if the specified value is a non-null object
+     * and every property of the object is either a primitive, null, or an empty object or empty array
+     *
+     * @param {*} pVal the value to evaulate
+     *
+     * @returns {boolean} if the specified value is a non-null object
+     *                    and none of its properties are populated objects or arrays
+     */
+    const isFlatObj = function( pVal )
+    {
+        if ( isNonNullObj( pVal ) )
+        {
+            const vals = isFunc( pVal.values ) ? pVal.values() : Object.values( pVal );
+            return !vals.some( e => (isNonNullObj( e ) || isArray( e )) && $xLn( e ) > 0 );
+        }
+        return false;
+    };
 
     /**
      * Enables DEBUG_MODE if it is not already enabled by checking the environment and command line arguments
@@ -5394,12 +5460,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isNonNullObj( pOptions ) )
         {
-            sources.unshift( Object.assign( {}, resolveObject( pOptions || {}, true ) ) );
+            sources.unshift( resolveObject( pOptions || {}, true ) );
         }
 
         sources = sources.reverse();
 
         let options = {};
+
+        if ( sources.every( e => isFlatObj( e ) ) )
+        {
+            let opts = { ...(sources.shift()) };
+            for( const source of sources )
+            {
+                opts = { ...opts, ...(source) };
+            }
+            return opts;
+        }
 
         function copyProperties( pTarget, pSource, pDepth = 0, pVisited = new Map(), pStack = [] )
         {
@@ -5407,14 +5483,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             let visited = isMap( pVisited ) ? pVisited : new Map();
 
-            let stack = [...(pStack || [])];
+            let stack = [...(pStack ?? [])];
 
             if ( isInvalidObj( pSource ) || visited.has( OBJECT_REGISTRY.getGuid( pSource ) ) )
             {
                 return pTarget;
             }
 
-            if ( depth > 1 || !isObjectLiteral( pSource ) || detectCycles( stack, 3, 3 ) )
+            const isLiteral = isObjectLiteral( pSource );
+
+            if ( depth > 1 || !isLiteral || detectCycles( stack, 3, 3 ) )
             {
                 return Object.assign( (pTarget || options),
                                       isFunc( pSource?.clone ) ?
@@ -5422,7 +5500,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                                : pSource );
             }
 
-            const entries = objectEntries( pSource );
+            const entries = isLiteral ? Object.entries( pSource ) : objectEntries( pSource );
 
             visited.set( OBJECT_REGISTRY.getGuid( pSource ), pSource );
 
@@ -5433,14 +5511,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                                  if ( key && (_ud !== typeof value) )
                                  {
-                                     pTarget[key] = (isNonNullObj( value ) ?
-                                                     copyProperties( (pTarget[key] || (isArray( value ) ? [] : {})),
-                                                                     value,
-                                                                     ++depth,
-                                                                     visited,
-                                                                     stack.concat( key ) ) :
-                                                     isBool( pTarget[key] ) ? (null === value ? false : !!value) :
-                                                     value);
+                                     attempt( () => pTarget[key] = (isNonNullObj( value ) ?
+                                                                    copyProperties( (pTarget[key] || (isArray( value ) ? [] : {})),
+                                                                                    value,
+                                                                                    ++depth,
+                                                                                    visited,
+                                                                                    stack.concat( key ) ) :
+                                                                    isBool( pTarget[key] ) ? (null === value ? false : !!value) :
+                                                                    value) );
                                  }
                              } );
 
@@ -5449,16 +5527,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         for( let source of sources )
         {
-            try
-            {
-                options = { ...options, ...source };
-
-                options = copyProperties( options, source ) || { ...(source || {}), ...(options || {}) };
-            }
-            catch( ex )
-            {
-                // ignore this...
-            }
+            options = { ...options, ...source };
+            options = attempt( () => copyProperties( options, source ) ) ?? options;
         }
 
         return options;
@@ -5467,7 +5537,25 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const populateOptions = function( pOptions, ...pDefaults )
     {
         let options = isNonNullObj( pOptions ) ? pOptions : {};
+
         let defaults = isArray( pDefaults ) ? [...(pDefaults || [])] : isNull( pDefaults ) ? [{}] : [pDefaults];
+
+        defaults = defaults.filter( isNonNullObj );
+
+        if ( isFlatObj( options ) && defaults.every( isFlatObj ) )
+        {
+            const sources = [options, ...defaults].reverse();
+
+            let opts = { ...(sources.shift()) };
+
+            for( const source of sources )
+            {
+                opts = { ...opts, ...(source) };
+            }
+
+            return opts;
+        }
+
         return attempt( () => resolveOptions( options, ...defaults ) );
     };
 
@@ -6750,8 +6838,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function _getNumericOption( pOptions, pProperty, pDefault )
     {
-        const options = resolveOptions( pOptions, DEFAULT_COPY_OPTIONS );
+        const options = { ...DEFAULT_COPY_OPTIONS, ...(pOptions ?? {}) };
+
         const option = options[pProperty] || pDefault || 0;
+
         return Math.max( 0, parseInt( isNum( option ) ? option : ((/^[\d.]$/.test( option )) ? option : (isNum( pDefault ) ? pDefault : 0)) ) );
     }
 
@@ -9741,17 +9831,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return [...(new Set( methods ))];
     };
 
+    const removeOptionalSyntax = e => isStr( e ) ? String( e ).trim().replaceAll( /\?+/g, _mt_str ) : isArray( e ) ? e.map( removeOptionalSyntax ) : e;
+    const toDotNotation = e => isStr( e ) ? bracketsToDots( e, { numericIndexOnly: false } ).trim().split( _dot ) : isArray( e ) ? e.map( toDotNotation ) : e;
+    const removeHashSign = e => isStr( e ) ? String( e ).trim().replace( /^#/, _mt_str ) : isArray( e ) ? e.map( removeHashSign ) : e;
+    const isValidArgument = e => isStr( e ) && e.trim().length > 0;
+    const isValidPathElement = e => isValidArgument( e ) && !(/[.\s#]/).test( e );
+
+    const rxLeadTrailingDots = /^\.+|\.+$/g;
+
     function toNodePathArray( pPropertyPath )
     {
-        const removeOptionalSyntax = e => isStr( e ) ? String( e ).trim().replaceAll( /\?+/g, _mt_str ) : isArray( e ) ? e.map( removeOptionalSyntax ) : e;
-
-        const toDotNotation = e => isStr( e ) ? bracketsToDots( e, { numericIndexOnly: false } ).trim().split( _dot ) : isArray( e ) ? e.map( toDotNotation ) : e;
-
-        const removeHashSign = e => isStr( e ) ? String( e ).trim().replace( /^#/, _mt_str ) : isArray( e ) ? e.map( removeHashSign ) : e;
-
-        const isValidArgument = e => isStr( e ) && e.trim().length > 0;
-        const isValidPathElement = e => isValidArgument( e ) && !(/[.\s#]/).test( e );
-
         let propertyPath = attempt( () => arguments.length > 1 ? [...arguments].map( removeHashSign ).map( removeOptionalSyntax ).filter( isValidArgument ) : pPropertyPath ) || pPropertyPath;
 
         let arr = isArray( propertyPath ) ? propertyPath.map( removeHashSign ).map( removeOptionalSyntax ).map( toDotNotation ).flat() : propertyPath;
@@ -9760,7 +9849,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         arr = arr.map( toDotNotation ).flat().map( removeOptionalSyntax ).flat();
 
-        arr = arr.map( removeHashSign ).flat().filter( isValidArgument ).map( e => e.trim().replaceAll( /^\.+|\.+$/g, _mt_str ) ).filter( isValidArgument );
+        arr = arr.map( removeHashSign ).flat().filter( isValidArgument ).map( e => String( e ).trim().replaceAll( rxLeadTrailingDots, _mt_str ) ).filter( isValidArgument );
 
         return arr.filter( isValidPathElement );
     }
@@ -11009,6 +11098,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             isObjectLiteral,
             isReadOnly,
+            isFlatObj,
 
             resolveOptions,
             populateOptions,

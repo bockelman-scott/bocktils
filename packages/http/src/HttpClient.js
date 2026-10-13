@@ -1,4 +1,4 @@
-// noinspection GrazieInspection
+// noinspection GrazieInspection,GrazieStyle
 
 /**
  * @overview
@@ -135,7 +135,6 @@ const { _ud = "undefined", $scope } = constants;
             ObjectEntry,
             IterationCap,
             IllegalStateError,
-            resolveOptions,
             populateOptions,
             attempt,
             attemptSilent,
@@ -609,7 +608,7 @@ const { _ud = "undefined", $scope } = constants;
             super();
         }
 
-        async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects = 0, pRetries = 0, pResolve, pReject )
+        async sendRequest( pMethod, pUrl, pConfig, pBody = null, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
 
         }
@@ -649,14 +648,7 @@ const { _ud = "undefined", $scope } = constants;
         async head( pUrl, pConfig )
         {
             const config = asObject( pConfig ?? {} );
-            return this.sendRequest( pUrl,
-                                     {
-                                         ...(asObject( DEFAULT_HTTP_CONFIG )),
-                                         ...(asObject( config )),
-                                         ...{ url: pUrl, method: head, headers: config.headers },
-                                         httpAgent: config.httpAgent ?? DEFAULT_HTTP_CONFIG.httpAgent,
-                                         httpsAgent: config.httpsAgent ?? DEFAULT_HTTP_CONFIG.httpsAgent
-                                     } );
+            return this.sendRequest( "HEAD", pUrl, pConfig );
         }
     }
 
