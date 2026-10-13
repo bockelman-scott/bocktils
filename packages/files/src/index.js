@@ -949,9 +949,16 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
         rmdirSync = _isNode ? function( pPath, pOptions )
         {
-            const options = mergeOptions( pOptions, { recurse: true, force: true, maxRetries: 3, retryDelay: 150 } );
+            const options =
+                {
+                    ...{ recurse: true, force: true, maxRetries: 3, retryDelay: 150 },
+                    ...(asObject( pOptions ?? {} ))
+                };
+
             const filePath = resolveDirectoryPath( pPath );
+
             (fs.rmSync ?? fs.rm)( filePath, options );
+
         } : _deno?.removeSync,
 
         readdirSync = _isNode ? fs.readdirSync : _deno?.readDirSync,
@@ -1136,9 +1143,16 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
         rmdir = _isNode ? async function( pPath, pOptions )
         {
-            const options = mergeOptions( pOptions, { recursive: true, force: true, maxRetries: 3, retryDelay: 150 } );
+            const options =
+                {
+                    ...{ recurse: true, force: true, maxRetries: 3, retryDelay: 150 },
+                    ...(asObject( pOptions ?? {} ))
+                };
+
             const filePath = resolveDirectoryPath( pPath );
+
             await fsAsync.rm( filePath, options );
+
         } : _deno?.remove,
 
         rename = _isNode ? fsAsync.rename : _deno?.rename,

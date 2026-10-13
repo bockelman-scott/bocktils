@@ -849,7 +849,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             return new LogFilter( pFilter );
         }
 
-        const options = populateOptions( pOptions | {}, {} );
+        const options = asObject( pOptions ?? {}, {} );
 
         return new LogFilter( options.filter || Filters.IDENTITY );
     };
@@ -910,7 +910,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     function resolveFormatter( pLogFormatter, pOptions = DEFAULT_LOG_FORMATTER_OPTIONS )
     {
-        const options = populateOptions( pOptions || {}, DEFAULT_LOG_FORMATTER_OPTIONS );
+        const options = { ...DEFAULT_LOG_FORMATTER_OPTIONS, ...(asObject( pOptions || {} )) };
 
         if ( isNull( pLogFormatter ) )
         {
