@@ -5103,7 +5103,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 continue;
             }
 
-            const value = visited.resolveForNodePath( undefined, [...stack, key] ) || ObjectEntry.getValue( entry );
+            const value = visited.resolveForNodePath( undefined, ...([...stack, key]) ) || ObjectEntry.getValue( entry );
 
             if ( !includeProperty( key, value, options ) )
             {
@@ -5144,7 +5144,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             if ( obj[key] )
             {
-                visited.resolveForNodePath( obj[key], [...stack, key] );
+                visited.resolveForNodePath( obj[key], ...([...stack, key]) );
             }
         }
 
