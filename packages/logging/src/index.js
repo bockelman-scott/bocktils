@@ -1630,7 +1630,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             if ( source instanceof SimpleLogger )
             {
-                const origin = asString( source?.source || source?.origin, true );
+                const origin = asString( source?.origin, true );
                 if ( !isBlank( origin ) )
                 {
                     return origin;
@@ -1806,6 +1806,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                                                   toolBocksModule.logger,
                                                   konsole,
                                                   console ) ?? console;
+        }
+
+        get origin()
+        {
+            return asString( this.#origin, true );
         }
 
         get source()
