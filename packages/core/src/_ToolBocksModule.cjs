@@ -2490,9 +2490,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function handleAttempt( pFunction, ...pArgs )
     {
-        let args = [...(pArgs || [])];
+        const args = [...(pArgs ?? [])].map( e => isNonNullObj( e ) ? dereference( e ) : e );
 
-        let func = isFunc( pFunction ) ? pFunction : ($ln( args ) <= 0 ? null : args.find( e => isFunc( e ) ));
+        const func = isFunc( pFunction ) ? pFunction : ($ln( args ) <= 0 ? null : args.find( e => isFunc( e ) ));
 
         if ( isFunc( func ) )
         {
@@ -2506,7 +2506,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             try
             {
-                return isAsyncFunction( func ) ? ((async() => func( ...pArgs ).then( r => r ))()) : func( ...pArgs );
+                return isAsyncFunction( func ) ? ((async() => func( ...args ).then( r => r ))()) : func( ...args );
             }
             catch( ex )
             {
@@ -2514,7 +2514,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 try
                 {
-                    attemptSilent( () => handleAttempt.handleError( ex, (pFunction?.name || nameFromSource( pFunction )), ...pArgs ) );
+                    attemptSilent( () => handleAttempt.handleError( ex, ((func ?? pFunction)?.name || nameFromSource( (func ?? pFunction) )), ...args ) );
                 }
                 catch( e )
                 {
