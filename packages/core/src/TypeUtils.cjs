@@ -1872,24 +1872,31 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 return false;
             }
 
-            if ( super.has( pValue ) )
+            const value = dereference( pValue );
+
+            if ( _ud === typeof value || null === value )
+            {
+                return false;
+            }
+
+            if ( super.has( value ) )
             {
                 return true;
             }
 
             for( let v of this.values() )
             {
-                if ( (_obj === typeof v) && (v === pValue || this.#equalityFunction( v, pValue )) )
+                if ( (_obj === typeof v) && (v === value || this.#equalityFunction( v, value )) )
                 {
                     return true;
                 }
 
-                if ( isFunction( v.equals ) && v.equals( pValue ) )
+                if ( isFunction( v.equals ) && v.equals( value ) )
                 {
                     return true;
                 }
 
-                if ( isFunction( pValue?.equals ) && pValue.equals( v ) )
+                if ( isFunction( value?.equals ) && value.equals( v ) )
                 {
                     return true;
                 }
@@ -1905,19 +1912,21 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 return null;
             }
 
+            const value = isNonNullObject( pValue ) ? dereference( pValue ) : pValue;
+
             for( let v of this.values() )
             {
-                if ( (_obj === typeof v) && (v === pValue || this.#equalityFunction( v, pValue )) )
+                if ( (_obj === typeof v) && (v === value || this.#equalityFunction( v, value )) )
                 {
                     return v;
                 }
 
-                if ( isFunction( v.equals ) && v.equals( pValue ) )
+                if ( isFunction( v.equals ) && v.equals( value ) )
                 {
                     return v;
                 }
 
-                if ( isFunction( pValue?.equals ) && pValue.equals( v ) )
+                if ( isFunction( value?.equals ) && value.equals( v ) )
                 {
                     return v;
                 }
@@ -1946,11 +1955,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         resolveForNodePath( pValue, ...pNodePath )
         {
-            let paths = toNodePathArray( ...pNodePath );
+            let paths = toNodePathArray( ...([...pNodePath].filter( isString )) );
 
             if ( isNull( paths ) || $ln( paths ) <= 0 )
             {
-                const val = this.resolve( pValue );
+                const val = dereference( this.resolve( pValue ) );
 
                 return isNull( val ) ? null : isWeakRef( val ) ? dereference( val ) : val;
             }
@@ -1975,17 +1984,25 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             if ( isNonNullObject( pObject ) )
             {
-                this.add( new WeakRef( pObject ) );
+                const obj = dereference( pObject );
 
-                if ( isNonNullValue( pValue ) )
+                if ( isNonNullObject( obj ) )
                 {
-                    this.#map.set( pObject, isNonNullObject( pValue ) ? new WeakRef( pValue ) : pValue );
-                    return dereference( pValue );
-                }
-                else
-                {
-                    let val = (this.has( pObject ) ? this.#map.get( pObject ) : pValue);
-                    return isNull( val ) ? val : isWeakRef( val ) ? dereference( val ) : val;
+                    this.add( new WeakRef( obj ) );
+
+                    if ( isNonNullValue( pValue ) )
+                    {
+                        const val = dereference( pValue );
+
+                        this.#map.set( obj, isNonNullObject( val ) ? new WeakRef( val ) : val );
+
+                        return dereference( val );
+                    }
+                    else
+                    {
+                        let val = (this.has( obj ) ? this.#map.get( obj ) : pValue);
+                        return isNull( val ) ? val : isWeakRef( val ) ? dereference( val ) : val;
+                    }
                 }
             }
 
@@ -5295,7 +5312,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         const stack = (pStack || []);
         const depth = toInteger( pDepth ) || 0;
 
-        if ( visited.has( pVal ) || depth > maxDepth || detectCycles( stack, 3, 3 ) )
+        if ( visited.has( dereference( pVal ) ) || visited.has( pVal ) || depth > maxDepth || detectCycles( stack, 3, 3 ) )
         {
             return pVal;
         }
@@ -5314,47 +5331,49 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return false;
         }
 
-        switch ( typeof pVal )
+        const val = isNonNullObject( pVal ) ? dereference( pVal ) : pVal;
+
+        switch ( typeof val )
         {
             case _ud:
                 return !!locked ? lock( map ) : map;
 
             case _obj:
-                if ( isNull( pVal ) )
+                if ( isNull( val ) )
                 {
                     break;
                 }
 
-                if ( isArray( pVal ) )
+                if ( isArray( val ) )
                 {
-                    if ( is2dArray( pVal ) )
+                    if ( is2dArray( val ) )
                     {
-                        map = new Map( pVal );
+                        map = new Map( val );
                         break;
                     }
 
-                    pVal.forEach( ( e, i ) =>
-                                  {
-                                      map.set( i, shouldRecurse( e, recursive ) ? asMap( e, options, visited, [...stack, i, depth + 1] ) : e );
-                                  } );
+                    val.forEach( ( e, i ) =>
+                                 {
+                                     map.set( i, shouldRecurse( e, recursive ) ? asMap( e, options, visited, [...stack, i, depth + 1] ) : e );
+                                 } );
                 }
                 else
                 {
-                    objectEntries( pVal ).forEach( entry =>
-                                                   {
-                                                       let key = ObjectEntry.getKey( entry );
+                    objectEntries( val ).forEach( entry =>
+                                                  {
+                                                      let key = ObjectEntry.getKey( entry );
 
-                                                       let value = ObjectEntry.getValue( entry );
+                                                      let value = ObjectEntry.getValue( entry );
 
-                                                       key = keyTransformer( key );
+                                                      key = keyTransformer( key );
 
-                                                       map.set( key, shouldRecurse( value, recursive ) ? asMap( value, options, visited, [...stack, key], depth + 1 ) : valueTransformer( value ) );
-                                                   } );
+                                                      map.set( key, shouldRecurse( value, recursive ) ? asMap( value, options, visited, [...stack, key], depth + 1 ) : valueTransformer( value ) );
+                                                  } );
                 }
                 break;
 
             case _str:
-                const str = valueTransformer( pVal );
+                const str = valueTransformer( val );
 
                 map.set( "value", str );
                 map.set( str, str );
@@ -5364,30 +5383,30 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             case _num:
             case _big:
             case _bool:
-                const num = valueTransformer( pVal );
+                const num = valueTransformer( val );
                 map.set( "value", num );
                 map.set( num, num );
                 map.set( _toString( num ), num );
                 break;
 
             case _fun:
-                map.set( (pVal?.name || "function"), pVal );
+                map.set( (val?.name || "function"), val );
                 map.execute = function( ...pArgs )
                 {
-                    return isAsyncFunction( pVal ) ? asyncAttempt( async() => await pVal.call( map, ...pArgs ) ) : attempt( () => pVal.call( map, ...pArgs ) );
+                    return isAsyncFunction( val ) ? asyncAttempt( async() => await val.call( map, ...pArgs ) ) : attempt( () => val.call( map, ...pArgs ) );
                 };
                 break;
 
             case _symbol:
-                map.set( pVal, pVal );
-                map.set( String( pVal ).toString(), pVal );
+                map.set( val, val );
+                map.set( String( val ).toString(), val );
                 break;
 
             default:
                 break;
         }
 
-        visited.resolve( pVal, map );
+        visited.resolve( val, map );
         visited.resolveForNodePath( map, ...stack );
 
         return !!locked ? lock( map ) : map;
