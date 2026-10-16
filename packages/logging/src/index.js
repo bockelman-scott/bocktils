@@ -1624,11 +1624,39 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     {
         let s = isNull( pSource ) ? _mt : pSource;
 
-        if ( isNonNullObject( pSource ) || isJsonObject( pSource ) )
+        if ( isNonNullObject( s ) || isJsonObject( s ) )
         {
-            const source = asObject( pSource );
+            let source = asObject( s );
 
-            const id = attempt( () => readProperty( source, "id", "name", "instanceId" ) );
+            if ( source instanceof SimpleLogger )
+            {
+                const origin = asString( source?.source || source?.origin, true );
+                if ( !isBlank( origin ) )
+                {
+                    return origin;
+                }
+            }
+
+            if ( isArray( source ) )
+            {
+                source = asArray( source );
+
+                if ( ($ln( source ) < 1 || source.every( e => _ud === typeof e )) )
+                {
+                    source = asString( s, true ).replace( /^\[/, _mt ).replace( /]$/, _mt );
+                    return `[${source}]`;
+                }
+                else
+                {
+                    source = source.every( e => isString( e ) ) ? source.join( _mt ) : source.filter( e => !isNull( e ) );
+                    if ( isString( source ) )
+                    {
+                        return asString( source, true );
+                    }
+                }
+            }
+
+            const id = attempt( () => source?.id || source?.name || readProperty( source, "id", "name", "instanceId" ) );
 
             const suffix = isBlank( id ) ? _mt : (" (" + asString( id, true ) + ")");
 
@@ -1669,7 +1697,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             }
             else if ( isJsonArray( pOptions ) )
             {
-                options.args = options.levels = asArray( attempt( () => parseJson( pOptions ) ) ?? [] );
+                options.args = options.levels = asArray( attempt( () => parseJson( pOptions ) ) ?? [] ).filter( e => SIMPLE_LOGGER_LEVELS.includes( e ) );
             }
             else
             {
@@ -1688,7 +1716,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             try
             {
-                options.levels = [...(asArray( options.levels )), ...(asArray( [...pArguments].slice( 2 ) ).flat())];
+                options.levels = [...(asArray( options.levels )), ...(asArray( [...pArguments].slice( 2 ) ).flat())].filter( e => isString( e ) && SIMPLE_LOGGER_LEVELS.includes( lcase( e ) ) );
                 options.levels = asArray( options.levels ?? options.args ).filter( e => isString( e ) && SIMPLE_LOGGER_LEVELS.includes( lcase( e ) ) );
                 options.levels = unique( asArray( options.levels ) );
             }
@@ -1700,7 +1728,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         if ( options?.source ?? options?.origin )
         {
-            options.source = resolveLogSourceName( options?.source ?? options?.origin );
+            options.source = resolveLogSourceName( options?.source ?? options?.origin ?? options );
         }
 
         return options;
@@ -1733,7 +1761,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
          */
         constructor( pLogger = konsole, pOptions = DEFAULT_SIMPLE_LOGGER_OPTIONS )
         {
-            super( pLogger, resolveSimpleLoggerOptions( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, arguments ) );
+            super( pLogger, resolveSimpleLoggerOptions( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, [...arguments] ) );
 
             const options =
                 {
@@ -1742,7 +1770,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 };
 
             const source = !isNull( options.source ?? options.origin ) ?
-                           attempt( () => resolveLogSourceName( options.source ?? options.origin ) ) :
+                           attempt( () => resolveLogSourceName( options.source ?? options.origin ?? options ) ) :
                            _mt;
 
             if ( !isBlank( source ) )
@@ -1782,7 +1810,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get source()
         {
-            return resolveLogSourceName( this.#origin ) || _mt;
+            return resolveLogSourceName( this.#origin ) || resolveLogSourceName( this ) || _mt;
         }
 
         get emitEvents()
@@ -1898,15 +1926,15 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                    {
                        ...DEFAULT_SIMPLE_LOGGER_OPTIONS,
                        ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, { respectToLiteralMethod: false } ),
-                       source: resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source )
+                       source: resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source ?? pOptions ?? pLogger )
                    } );
 
-            this.#source = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source ?? super.source );
+            this.#source = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source ?? pOptions ?? pLogger ?? super.source );
         }
 
         resolveSourceName( pSource )
         {
-            let s = resolveLogSourceName( pSource );
+            let s = resolveLogSourceName( pSource ?? this.#source ?? this.origin );
 
             if ( isBlank( s ) )
             {
@@ -1922,9 +1950,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get source()
         {
-            const source = this.#source ?? super.source;
+            const source = this.#source ?? this.origin ?? super.source;
 
-            return this.resolveSourceName( source );
+            return this.resolveSourceName( source ?? this.#source );
         }
     }
 
@@ -1952,7 +1980,14 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
     {
-        const sourceName = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source ?? pLogger?.origin );
+        const sourceName = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source ?? pLogger?.origin ?? pOptions ?? pLogger );
+
+        let options =
+            {
+                ...(asObject( pOptions ?? {} )),
+                source: sourceName,
+                origin: sourceName
+            };
 
         if ( isNonNullObject( pLogger ) && pLogger instanceof SimpleLogger )
         {
@@ -1961,13 +1996,6 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             {
                 return pLogger;
             }
-
-            let options =
-                {
-                    ...(asObject( pOptions ?? {} )),
-                    source: sourceName,
-                    origin: sourceName
-                };
 
             const logger = (asObject( pLogger ?? {} ) instanceof SourcedSimpleLogger) ?
                            attempt( () => unwrapSourcedSimpleLogger( pLogger ) ) :
@@ -1978,13 +2006,6 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 return new SourcedSimpleLogger( logger, sourceName, options );
             }
         }
-
-        let options =
-            {
-                ...(asObject( pOptions ?? {} )),
-                source: sourceName,
-                origin: sourceName
-            };
 
         let logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger() ) ??
                      new SimpleLogger( (pLogger ?? konsole ?? console), options );
