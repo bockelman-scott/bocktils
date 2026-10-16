@@ -109,6 +109,7 @@ const { _ud = "undefined", $scope } = constants;
             attempt,
             attemptSilent,
             asyncAttempt,
+            dereference,
             lock,
             localCopy,
             objectKeys,
@@ -1879,15 +1880,15 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pObject, pOptions )
         {
-            this.#object = asObject( pObject || {} );
-            this.#options = { ...(pOptions || {}) };
+            this.#object = asObject( pObject ?? this.#object ?? {} );
+            this.#options = { ...(pOptions ?? this.#options ?? {}) };
         }
 
         get map()
         {
             if ( isNull( this.#map ) || !isMap( this.#map ) )
             {
-                this.#map = asMap( (this.#object || {}), (this.#options || {}) );
+                this.#map = asMap( (this.#object || {}), (this.#options || {}) ) ?? new Map();
             }
 
             return lock( new Map( this.#map ) );
@@ -1897,43 +1898,49 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( isNull( this.#literal ) || !isObject( this.#literal ) )
             {
-                this.#literal = isFunction( this.#object?.toLiteral ) ? this.#object.toLiteral() : toObjectLiteral( (this.#object || {}), (this.#options || {}) );
+                this.#literal = isFunction( this.#object?.toLiteral ) ? attempt( () => this.#object.toLiteral() ) : attempt( () => toObjectLiteral( asObject( this.#object ?? {} ), (this.#options ?? {}) ) );
             }
-            return lock( { ...(this.#literal || {}) } );
+            return lock( { ...(asObject( this.#literal ?? {} )) } );
         }
 
         getConfigValue( pKey )
         {
-            let key = asString( pKey, true );
+            const key = asString( pKey, true );
 
-            const map = this.map;
+            const map = this.map ?? new Map();
 
-            let value = readProperty( map, key );
+            let value = isMap( map ) ? (map.get( key ) ?? readProperty( map, key )) : readProperty( map, key );
 
             if ( isNull( value ) )
             {
-                const o = (this.#object || {});
-                value = readProperty( o, key );
+                const o = asObject( this.#object ?? {} );
+                value = isMap( o ) ? attempt( () => o.get( key ) ) ?? attempt( () => readProperty( o, key ) ) : attempt( () => readProperty( o, key ) );
             }
 
-            return value || (readProperty( this.literal, key ));
+            return value || (attempt( () => readProperty( this.literal, key ) )) || null;
         }
 
         resolveValue( pDescriptor, pValue, pKey )
         {
-            const descriptor = pDescriptor || DEFAULT_PROPERTY_DESCRIPTOR;
+            const descriptor =
+                {
+                    ...DEFAULT_PROPERTY_DESCRIPTOR,
+                    ...(asObject( pDescriptor ?? DEFAULT_PROPERTY_DESCRIPTOR ))
+                };
 
             let { required, types, allowed, value } = this.resolveDescriptor( descriptor, pValue, pKey );
 
-            if ( this.isMissingValue( pValue ) )
+            let val = this.isMissingValue( pValue ) ? value : pValue;
+
+            if ( this.isMissingValue( val ) )
             {
                 return (required) ? this.resolveDefaultValue( descriptor, types ) : null;
             }
 
-            switch ( typeof pValue )
+            switch ( typeof val )
             {
                 case _str:
-                    value = this.handleStringValue( value, types, allowed, descriptor );
+                    value = this.handleStringValue( (val ?? value ?? pValue), types, allowed, descriptor );
                     break;
 
                 case _obj:
@@ -1943,35 +1950,41 @@ const { _ud = "undefined", $scope } = constants;
                     }
                     else
                     {
-                        value = this.handleObjectValue( value, pValue, descriptor, this );
+                        value = this.handleObjectValue( (val ?? value ?? pValue), descriptor, descriptor?.["default"] ?? pValue ?? value ?? val );
                     }
                     break;
 
                 default:
-                    if ( !types.includes( typeof pValue ) )
+                    if ( !types.includes( typeof val ) )
                     {
                         value = null;
                     }
                     break;
             }
 
-            return value;
+            return value ?? val ?? pValue;
         }
 
-        handleObjectValue( pValue, pDescriptor )
+        handleObjectValue( pValue, pDescriptor, pDefault )
         {
-            const descriptor = pDescriptor || DEFAULT_PROPERTY_DESCRIPTOR;
+            const me = this;
 
-            let value = { ...(pValue || {}) };
+            const descriptor =
+                {
+                    ...DEFAULT_PROPERTY_DESCRIPTOR,
+                    ...(asObject( pDescriptor ?? DEFAULT_PROPERTY_DESCRIPTOR ))
+                };
 
-            const properties = asArray( descriptor?.properties || [] ).filter( e => !(isNull( e ) || isBlank( e )) );
+            let value = { ...(dereference( asObject( (pValue || {}) ) )) };
+
+            const properties = asArray( descriptor?.properties ?? objectKeys( descriptor ) ).filter( e => !(isNull( e ) || isBlank( e )) );
 
             for( let prop of properties )
             {
-                value[prop] = value[prop] ||
-                              attempt( () => this.resolveValue( descriptor || DEFAULT_PROPERTY_DESCRIPTOR,
-                                                                this.getConfigValue( prop ),
-                                                                prop ) );
+                value[prop] = value[prop] ??
+                              attempt( () => (me ?? this).resolveValue( descriptor || DEFAULT_PROPERTY_DESCRIPTOR,
+                                                                        (me ?? this).getConfigValue( prop ),
+                                                                        prop ) );
 
                 if ( this.isMissingValue( value[prop] ) )
                 {
@@ -1984,22 +1997,38 @@ const { _ud = "undefined", $scope } = constants;
 
         handleStringValue( pValue, pTypes, pAllowedValues, pDescriptor )
         {
-            let value = pValue;
+            const descriptor =
+                {
+                    ...DEFAULT_PROPERTY_DESCRIPTOR,
+                    ...(asObject( pDescriptor ?? DEFAULT_PROPERTY_DESCRIPTOR ))
+                };
 
-            if ( ($ln( pTypes ) > 0 && !pTypes.includes( _str )) || ($ln( pAllowedValues ) > 0 && !pAllowedValues.map( lcase ).includes( lcase( pValue ) )) )
+            const types = asArray( (isArray( pTypes ) ? [...pTypes].filter( e => isString( e ) && !isBlank( e ) ) : descriptor?.types) ?? DEFAULT_PROPERTY_DESCRIPTOR.types );
+
+            const allowed = asArray( isArray( pAllowedValues ) ? asArray( pAllowedValues ) : descriptor?.allowed ?? DEFAULT_PROPERTY_DESCRIPTOR.allowed ?? [] );
+
+            let value = (pValue ?? descriptor?.value ?? descriptor?.["default"]);
+
+            if ( ($ln( types ) > 0 && !types.includes( _str )) || ($ln( allowed ) > 0 && !allowed.map( lcase ).includes( lcase( value ) )) )
             {
-                value = pDescriptor.default || null;
+                value = descriptor?.["default"] ?? null;
             }
 
-            return value;
+            return asString( value );
         }
 
         resolveDefaultValue( pDescriptor, pTypes )
         {
-            let descriptor = pDescriptor || DEFAULT_PROPERTY_DESCRIPTOR;
-            let types = asArray( pTypes || [] );
+            const descriptor =
+                {
+                    ...DEFAULT_PROPERTY_DESCRIPTOR,
+                    ...({ types: asArray( pTypes ?? DEFAULT_PROPERTY_DESCRIPTOR.types ?? [] ) }),
+                    ...(asObject( pDescriptor ?? DEFAULT_PROPERTY_DESCRIPTOR ))
+                };
 
-            return descriptor.default ||
+            const types = asArray( pTypes ?? descriptor?.types ?? DEFAULT_PROPERTY_DESCRIPTOR.types );
+
+            return descriptor["default"] ||
                    (types.includes( _str ) ?
                     _mt :
                     (types.includes( _bool ) ?
@@ -2016,35 +2045,45 @@ const { _ud = "undefined", $scope } = constants;
 
         resolveDescriptor( pDescriptor, pValue, pKey )
         {
-            const descriptor = pDescriptor || DEFAULT_PROPERTY_DESCRIPTOR;
+            const descriptor =
+                {
+                    ...DEFAULT_PROPERTY_DESCRIPTOR,
+                    ...(asObject( pDescriptor ?? DEFAULT_PROPERTY_DESCRIPTOR ))
+                };
 
-            const required = descriptor.required;
+            const required = descriptor?.required || false;
 
-            let types = asArray( descriptor.types || DEFAULT_PROPERTY_DESCRIPTOR.types ).filter( e => !isNull( e ) ).map( asString );
-            let allowed = asArray( descriptor?.allowedValues || [] ).filter( e => !isNull( e ) ).map( asString );
+            const types = asArray( descriptor?.types ?? DEFAULT_PROPERTY_DESCRIPTOR.types ).filter( e => !isNull( e ) ).map( e => asString( e ) );
+            const allowed = asArray( descriptor?.allowedValues ?? [] ).filter( e => !isNull( e ) ).map( e => asString( e ) );
 
-            let value = pValue || this.getConfigValue( pKey );
+            const value = pValue ?? this.getConfigValue( pKey ) ?? descriptor?.default;
 
-            return { required, types, allowed, value };
+            return { required, types, allowed, value, "default": descriptor?.["default"] ?? value };
         }
 
         buildConfig( pModel )
         {
             let config = {};
 
-            const entries = objectEntries( pModel || {} );
+            const me = this;
+
+            const entries = objectEntries( pModel ?? {} );
 
             entries.forEach( entry =>
                              {
                                  const key = ObjectEntry.getKey( entry );
 
-                                 const descriptor = ObjectEntry.getValue( entry );
+                                 const value = ObjectEntry.getValue( entry );
 
-                                 let cfgValue = this.resolveValue( descriptor, this.getConfigValue( key ), key );
+                                 const descriptor = this.resolveDescriptor( value, config[key], key );
+
+                                 const val = this.getConfigValue( key );
+
+                                 const cfgValue = attempt( () => this.resolveValue( descriptor, val, key ) );
 
                                  if ( !isNull( cfgValue ) )
                                  {
-                                     config[key] = cfgValue;
+                                     config[key] = config[key] || cfgValue;
                                  }
                              } );
             return config;
@@ -2052,34 +2091,43 @@ const { _ud = "undefined", $scope } = constants;
 
         populateConfig( pConfig, pModel )
         {
-            const config = toHttpConfigLiteral( asObject( pConfig ) ) || {};
+            const me = this;
 
-            const headers = config?.headers || pConfig?.headers;
+            const config = attempt( () => isNonNullObject( pConfig ) && isFunction( pConfig.toLiteral ) ? attempt( () => pConfig.toLiteral() ) ?? toHttpConfigLiteral( asObject( pConfig ?? {} ) ) ?? {} : toHttpConfigLiteral( asObject( pConfig ?? {} ) ) ?? {} ) ?? {};
 
-            const entries = objectEntries( pModel || {} );
+            const headers = config?.headers ?? pConfig?.headers ?? (isNonNullObject( pModel ) ? pModel.headers ?? {} : {}) ?? {};
+
+            const entries = objectEntries( asObject( pModel ?? config ?? {} ) );
 
             entries.forEach( entry =>
                              {
-                                 const key = ObjectEntry.getKey( entry );
-
-                                 const descriptor = ObjectEntry.getValue( entry );
-
-                                 let cfgValue = this.resolveValue( descriptor, this.getConfigValue( key ), key );
-
-                                 if ( !isNull( cfgValue ) )
+                                 if ( !isNull( entry ) )
                                  {
-                                     if ( isNull( config[key] ) )
+                                     const key = ObjectEntry.getKey( entry );
+
+                                     const value = ObjectEntry.getValue( entry );
+
+                                     const descriptor = me.resolveDescriptor( value, config[key], key );
+
+                                     const val = me.getConfigValue( key );
+
+                                     const cfgValue = attempt( () => me.resolveValue( descriptor, val, key ) );
+
+                                     if ( !isNull( cfgValue ) )
                                      {
-                                         attemptSilent( () => config[key] = cfgValue || config[key] );
-                                         if ( isNull( config[key] ) && !descriptor?.required )
+                                         if ( isNull( config[key] ) )
                                          {
-                                             attempt( () => delete config[key] );
+                                             attemptSilent( () => config[key] = cfgValue || config[key] );
+                                             if ( isNull( config[key] ) && !descriptor?.required )
+                                             {
+                                                 attempt( () => delete config[key] );
+                                             }
                                          }
-                                     }
-                                     else if ( isNonNullObject( config[key] ) )
-                                     {
-                                         let cfgObject = isNonNullObject( cfgValue ) ? cfgValue : {};
-                                         attemptSilent( () => config[key] = { ...(cfgObject || {}), ...(config[key]) } );
+                                         else if ( isNonNullObject( config[key] ) )
+                                         {
+                                             let cfgObject = isNonNullObject( cfgValue ) ? cfgValue : {};
+                                             attemptSilent( () => config[key] = { ...(cfgObject || {}), ...(config[key]) } );
+                                         }
                                      }
                                  }
                              } );
