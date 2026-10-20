@@ -1215,6 +1215,47 @@ describe( "Error Handling", () =>
         expect( errorSourceName ).toBe( "SomeModule::SomeFunction" );
     } );
 
+    test( "__Error keeps the stack frames of the code that threw it", () =>
+    {
+        function failSomething()
+        {
+            throw new __Error( "something failed" );
+        }
+
+        let error = null;
+
+        try
+        {
+            failSomething();
+        }
+        catch( ex )
+        {
+            error = ex;
+        }
+
+        expect( error.stack ).toMatch( /at failSomething/ );
+    } );
+
+    test( "IllegalArgumentError keeps the stack frames of the code that threw it", () =>
+    {
+        function rejectArgument()
+        {
+            throw new IllegalArgumentError( "bad argument" );
+        }
+
+        let error = null;
+
+        try
+        {
+            rejectArgument();
+        }
+        catch( ex )
+        {
+            error = ex;
+        }
+
+        expect( error.stack ).toMatch( /at rejectArgument/ );
+    } );
 
     //TODO
 } );
