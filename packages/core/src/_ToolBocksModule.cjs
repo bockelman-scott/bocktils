@@ -3403,7 +3403,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return $ln( paths ) <= 0 && !isNull( o );
             }
 
-            return Object.hasOwn( obj, propertyName ) || (propertyName in obj) || !isNull( readProperty( obj, ...pPropertyName ) );
+            return Object.hasOwn( obj, propertyName ) || (propertyName in obj) || !isNull( readProperty( obj, propertyName ) );
         }
 
         return false;

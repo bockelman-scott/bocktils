@@ -51,6 +51,7 @@ const
         setProperty,
         readProperty,
         readScalarProperty,
+        hasProperty,
         populateOptions,
         mergeOptions,
         merge = mergeOptions,
@@ -2586,6 +2587,27 @@ describe( "readProperty", () =>
         expect( typeof code ).toEqual( "undefined" );
     } );
 
+} );
+
+describe( "hasProperty", () =>
+{
+    test( "hasProperty finds a property by its name or a variant readProperty accepts", () =>
+    {
+        expect( hasProperty( { zipCode: "60601" }, "zipCode" ) ).toBe( true );
+        expect( hasProperty( { zipCode: "60601" }, "zip_code" ) ).toBe( true );
+    } );
+
+    test( "hasProperty does not match single letters of the property name", () =>
+    {
+        expect( hasProperty( { z: 1 }, "zip" ) ).toBe( false );
+        expect( hasProperty( [].values(), "first_name" ) ).toBe( false );
+    } );
+
+    test( "hasProperty returns false, rather than throwing, when no property name is given", () =>
+    {
+        expect( () => hasProperty( "postal_code" ) ).not.toThrow();
+        expect( hasProperty( "postal_code" ) ).toBe( false );
+    } );
 } );
 
 describe( "readScalarProperty", () =>
