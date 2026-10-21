@@ -3403,7 +3403,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return $ln( paths ) <= 0 && !isNull( o );
             }
 
-            return Object.hasOwn( obj, propertyName ) || (propertyName in obj) || !isNull( readProperty( obj, ...pPropertyName ) );
+            return Object.hasOwn( obj, propertyName ) || (propertyName in obj) || !isNull( readProperty( obj, propertyName ) );
         }
 
         return false;
@@ -7275,7 +7275,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#referenceId = attemptSilent( () => me.calculateReferenceId( pMsgOrErr || me ) );
 
             // Capture stack trace if available
-            attemptSilent( () => Error.captureStackTrace ? Error.captureStackTrace( this, Error ) : no_op() );
+            attemptSilent( () => Error.captureStackTrace ? Error.captureStackTrace( this, this.constructor ) : no_op() );
 
             this.stack = (isError( this.cause ) ? this.cause?.stack : (isError( pMsgOrErr ) ? pMsgOrErr.stack || this.stack : this.stack)) || this.stack;
 
@@ -7513,7 +7513,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             super( pMessage, pOptions, ...pArgs );
 
             // Capture stack trace if available
-            attemptSilent( () => Error.captureStackTrace ? Error.captureStackTrace( this, Error ) : no_op() );
+            attemptSilent( () => Error.captureStackTrace ? Error.captureStackTrace( this, this.constructor ) : no_op() );
 
             let options = { ...(pOptions || {}) };
 

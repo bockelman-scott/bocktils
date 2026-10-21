@@ -51,6 +51,7 @@ const
         setProperty,
         readProperty,
         readScalarProperty,
+        hasProperty,
         populateOptions,
         mergeOptions,
         merge = mergeOptions,
@@ -1214,6 +1215,47 @@ describe( "Error Handling", () =>
         expect( errorSourceName ).toBe( "SomeModule::SomeFunction" );
     } );
 
+    test( "__Error keeps the stack frames of the code that threw it", () =>
+    {
+        function failSomething()
+        {
+            throw new __Error( "something failed" );
+        }
+
+        let error = null;
+
+        try
+        {
+            failSomething();
+        }
+        catch( ex )
+        {
+            error = ex;
+        }
+
+        expect( error.stack ).toMatch( /at failSomething/ );
+    } );
+
+    test( "IllegalArgumentError keeps the stack frames of the code that threw it", () =>
+    {
+        function rejectArgument()
+        {
+            throw new IllegalArgumentError( "bad argument" );
+        }
+
+        let error = null;
+
+        try
+        {
+            rejectArgument();
+        }
+        catch( ex )
+        {
+            error = ex;
+        }
+
+        expect( error.stack ).toMatch( /at rejectArgument/ );
+    } );
 
     //TODO
 } );
@@ -2586,6 +2628,27 @@ describe( "readProperty", () =>
         expect( typeof code ).toEqual( "undefined" );
     } );
 
+} );
+
+describe( "hasProperty", () =>
+{
+    test( "hasProperty finds a property by its name or a variant readProperty accepts", () =>
+    {
+        expect( hasProperty( { zipCode: "60601" }, "zipCode" ) ).toBe( true );
+        expect( hasProperty( { zipCode: "60601" }, "zip_code" ) ).toBe( true );
+    } );
+
+    test( "hasProperty does not match single letters of the property name", () =>
+    {
+        expect( hasProperty( { z: 1 }, "zip" ) ).toBe( false );
+        expect( hasProperty( [].values(), "first_name" ) ).toBe( false );
+    } );
+
+    test( "hasProperty returns false, rather than throwing, when no property name is given", () =>
+    {
+        expect( () => hasProperty( "postal_code" ) ).not.toThrow();
+        expect( hasProperty( "postal_code" ) ).toBe( false );
+    } );
 } );
 
 describe( "readScalarProperty", () =>
