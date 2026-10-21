@@ -7,12 +7,7 @@ const httpUtils = require( "@toolbocks/http" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud, $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
