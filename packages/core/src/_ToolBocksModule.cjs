@@ -3403,7 +3403,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return $ln( paths ) <= 0 && !isNull( o );
             }
 
-            return Object.hasOwn( obj, propertyName ) || (propertyName in obj) || !isNull( readProperty( obj, propertyName ) );
+            return Object.hasOwn( obj, propertyName ) || (propertyName in obj) /*|| !isNull( readProperty( obj, propertyName ) )*/;
         }
 
         return false;
@@ -3466,7 +3466,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         let propertyName = _asStr( pPropertyName ).trim();
 
-        if ( isNull( pObj ) || (_mt_str === propertyName) )
+        if ( isNull( pObj ) || (_mt_str === propertyName) || isReadOnly( pObj ) )
         {
             return false;
         }
@@ -3477,7 +3477,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( descriptor )
             {
-                return (descriptor.writable && descriptor.enumerable) || isFunction( descriptor.set );
+                return (descriptor.writable && descriptor.enumerable) || isFunc( descriptor.set );
             }
         }
 
@@ -4818,9 +4818,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                                 let prop = ObjectEntry.getKey( entry );
                                                                 let value = ObjectEntry.getValue( entry );
 
-                                                                if ( ( !skip.includes( prop ) || isNull( target[prop] )) && isWritable( target, prop ) )
+                                                                try
                                                                 {
-                                                                    attemptSilent( () => (target[prop] = target[prop] || (isArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
+                                                                    if ( ( !skip.includes( prop ) || isNull( target[prop] )) && isWritable( target, prop ) )
+                                                                    {
+                                                                        attemptSilent( () => (target[prop] = target[prop] || (isArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
+                                                                    }
+                                                                }
+                                                                catch( ex )
+                                                                {
+                                                                    const logger = ToolBocksModule.resolveLogger( ToolBocksModule.getGlobalLogger(), INTERNAL_LOGGER );
+                                                                    attemptSilent( () => (logger ?? konsole).error( ex.message, ex ) );
                                                                 }
                                                             } ) );
         }
@@ -4838,16 +4846,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             let skip = [...((pOmit || []) || [])];
 
-            objectEntries( source ).forEach( entry =>
-                                             {
-                                                 let prop = ObjectEntry.getKey( entry );
-                                                 let value = ObjectEntry.getValue( entry );
+            attempt( () => objectEntries( source ).forEach( entry =>
+                                                            {
+                                                                let prop = ObjectEntry.getKey( entry );
+                                                                let value = ObjectEntry.getValue( entry );
 
-                                                 if ( !skip.includes( prop ) && (isNull( target[prop] ) || isWritable( target, prop )) )
-                                                 {
-                                                     attemptSilent( () => (target[prop] = (isArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
-                                                 }
-                                             } );
+                                                                if ( !skip.includes( prop ) && (isNull( target[prop] ) || isWritable( target, prop )) )
+                                                                {
+                                                                    attemptSilent( () => (target[prop] = (isArray( value ) ? [...((value || []) || [])] : value) ?? target[prop]) );
+                                                                }
+                                                            } ) );
         }
 
         return target;
@@ -5235,9 +5243,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     }
                     else if ( isPrimitiveWrapper( valueA ) && isPrimitiveWrapper( valueB ) )
                     {
-                        let a = isFunction( valueA.valueOf ) ? valueA.valueOf() : isFunction( valueA.toString ) ? valueA.toString() : (_mt + valueA);
+                        let a = isFunc( valueA.valueOf ) ? valueA.valueOf() : isFunc( valueA.toString ) ? valueA.toString() : (_mt + valueA);
 
-                        let b = isFunction( valueB.valueOf ) ? valueB.valueOf() : isFunction( valueB.toString ) ? valueB.toString() : (_mt + valueB);
+                        let b = isFunc( valueB.valueOf ) ? valueB.valueOf() : isFunc( valueB.toString ) ? valueB.toString() : (_mt + valueB);
 
                         if ( a !== b )
                         {
@@ -8170,7 +8178,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             const logger = objectValues( options ).find( e => ToolBocksModule.isLogger( e ) );
 
-            this.#logger = ToolBocksModule.isLogger( logger ) ? logger : null;
+            this.#logger = ToolBocksModule.isLogger( logger ) ? logger : ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), INTERNAL_LOGGER );
 
             attempt( () => me.#processOptions( options ) );
 
@@ -10074,7 +10082,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                             }
                                                             else if ( isNonNullObj( existing ) )
                                                             {
-                                                                if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
+                                                                if ( (isFunc( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
                                                                 {
                                                                     value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [(pKey || key)]: pValue }) };
                                                                 }
@@ -10128,7 +10136,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             if ( isMap( obj ) || (isFunc( obj?.set ) && (2 === $ln( obj?.set ))) )
             {
                 attemptSilent( () => obj.set( key, (((keys.length > 0) ? (isMap( obj ) ? obj.get( key ) ?? new Map() : obj[key] ?? {}) : (pVal ?? pValue))) ?? (pVal ?? pValue) ) );
-                return isFunction( obj.get ) ? obj.get( key ) : obj[key];
+                return isFunc( obj.get ) ? obj.get( key ) : obj[key];
             }
             else
             {
