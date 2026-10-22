@@ -3627,7 +3627,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                delay = asInt( Math.max( delay, this.millisecondsUntilReset ) ) + 100; // add 100 milliseconds to let the server reset its counts
+                delay = asInt( Math.max( delay, this.millisecondsUntilReset ) ) + 128; // add 128 milliseconds to let the server reset its counts
 
                 if ( this.debugLevel > 2 )
                 {
