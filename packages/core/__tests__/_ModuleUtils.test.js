@@ -2632,10 +2632,20 @@ describe( "readProperty", () =>
 
 describe( "hasProperty", () =>
 {
-    test( "hasProperty finds a property by its name or a variant readProperty accepts", () =>
+    test( "hasProperty only matches the exact property name", () =>
     {
         expect( hasProperty( { zipCode: "60601" }, "zipCode" ) ).toBe( true );
-        expect( hasProperty( { zipCode: "60601" }, "zip_code" ) ).toBe( true );
+        expect( hasProperty( { zipCode: "60601" }, "zip_code" ) ).toBe( false );
+    } );
+
+    test( "hasProperty does not run getters to look for other spellings of the name", () =>
+    {
+        let ran = false;
+
+        const obj = { get zipCode() { ran = true; return "60601"; } };
+
+        expect( hasProperty( obj, "zip_code" ) ).toBe( false );
+        expect( ran ).toBe( false );
     } );
 
     test( "hasProperty does not match single letters of the property name", () =>
