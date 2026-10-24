@@ -1,0 +1,122 @@
+{
+  "LOGGER": {
+    "id": "logging.logger",
+    "name": "logger",
+    "description": "A logger utility for logging messages to a destination"
+  },
+  "SECRETS_MANAGER": {
+    "id": "secrets.secretsManager",
+    "name": "secretsManager",
+    "description": "Secrets Manager for obtaining API Keys and other secrets"
+  },
+  "SECRETS_MANAGER_FACTORY": {
+    "id": "secrets.factory",
+    "name": "secretsManagerFactory",
+    "description": "Factory for creating Secrets Manager instances for obtaining API Keys and other secrets"
+  },
+  "AUTHENTICATOR": {
+    "id": "utils.auth",
+    "name": "authenticator",
+    "description": "Authenticator object for obtaining and refreshing authentication tokens and credentials"
+  },
+  "THROTTLER": {
+    "id": "http.throttler",
+    "name": "throttler",
+    "description": "A utility for throttling API requests to avoid exceeding rate limits"
+  },
+  "HTTP_CONFIG_FACTORY": {
+    "id": "http.httpConfigFactory",
+    "name": "httpConfigFactory",
+    "description": "A factory for creating HTTP configuration objects for setting up HTTP requests"
+  },
+  "HTTP_CONFIG": {
+    "id": "http.httpConfig",
+    "name": "httpConfig",
+    "description": "An HTTP configuration object for use in HTTP requests"
+  },
+  "HTTP_CLIENT_FACTORY": {
+    "id": "http.httpClientFactory",
+    "name": "httpClientFactory",
+    "description": "Factory for creating HTTP Clients for making HTTP requests"
+  },
+  "HTTP_CLIENT": {
+    "id": "http.httpClient",
+    "name": "httpClient",
+    "description": "HTTP Client for making HTTP requests"
+  },
+  "CONFIGURATION": {
+    "id": "cfg.base",
+    "name": "configuration",
+    "description": "Base Configuration object to hold configuration settings for various components"
+  },
+  "REST_API_CONFIGURATION": {
+    "id": "cfg.rest",
+    "name": "configuration",
+    "description": "Configuration objects that make HTTP calls to REST APIs"
+  },
+  "ENTITY_CACHE": {
+    "id": "cache.entity",
+    "name": "entityCache",
+    "description": "Cache for storing and retrieving entity data"
+  },
+  "READ_THROUGH_CACHE": {
+    "id": "cache.readThrough",
+    "name": "readThroughCache",
+    "description": "Cache of entity data capable of read-through operations"
+  },
+  "SQL_DATA_SOURCE": {
+    "id": "ds.sql",
+    "name": "datasource",
+    "description": "SQL Data Source for interacting with a SQL databases"
+  },
+  "DS_CONNECTION_POOL": {
+    "id": "ds.connectionPool",
+    "name": "connectionPool",
+    "description": "Connection Pool for managing database connections"
+  },
+  "DS_DATA_SOURCE": {
+    "id": "ds.dataSource",
+    "name": "dataSource",
+    "description": "Data Source for any persistent data storage"
+  },
+  "BLOB_STORE": {
+    "id": "utils.blobStore",
+    "name": "blobStore",
+    "description": "Provider-agnostic blob/object store client (S3, Azure Blob Storage, local disk)"
+  },
+  "DOCUMENT_DATA_SOURCE": {
+    "id": "ds.documents",
+    "name": "documentDataSource",
+    "description": "Data source for project documents (signatures, retainers) stored in S3"
+  },
+  "QUERY_CACHE": {
+    "id": "ds.sql.queryCache",
+    "name": "queryCache",
+    "description": "The object from which SQL queries are obtained, with methods for generating dynamic queries from query templates"
+  },
+  "MESSAGE_QUEUE": {
+    "id": "ds.messageQueue",
+    "name": "messageQueue",
+    "description": "Message Queue data source for interacting with a message queue or message broker"
+  },
+  "HEADLESS_BROWSER": {
+    "id": "utils.browser",
+    "name": "browser",
+    "description": "A utility for running headless browsers for web scraping and automation tasks, such as Puppeteer"
+  },
+  "WORKER_POOL": {
+    "id": "utils.workerPool",
+    "name": "workerPool",
+    "description": "A utility for managing parallel execution"
+  },
+  "JOB_WORKER_POOL": {
+    "id": "utils.jobWorkerPool",
+    "name": "jobWorkerPool",
+    "description": "Piscina-based worker pool for parallel job execution"
+  },
+  "DOCUMENT_SERVICE": {
+    "id": "services.documents",
+    "name": "documentService",
+    "description": "Service for managing project documents (signatures, retainers) in S3"
+  }
+}

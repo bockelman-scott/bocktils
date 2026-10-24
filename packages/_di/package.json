@@ -1,0 +1,20 @@
+{
+  "name": "@toolbocks/dep-injection",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/files": "^1.0.0",
+    "@toolbocks/json": "^1.0.0",
+    "@toolbocks/logging": "^1.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  },
+  "private": true
+}
