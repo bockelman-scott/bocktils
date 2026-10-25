@@ -50,7 +50,7 @@ describe( "DependentObject", () =>
 {
     test( "A DependentObject receives dependencies when constructed", () =>
     {
-        const dependency = new Dependency( new SomeDependency(), "someDependency" );
+        const dependency = new Dependency( new SomeDependency(), "someDependency", "someDependency" );
         const logger = new Dependency( new SimpleLogger( console ), "logger", "logging.logger" );
         const dependencies = new Dependencies( logger, dependency );
         const a = new SomeClassA( dependencies );
