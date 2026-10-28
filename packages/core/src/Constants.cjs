@@ -771,6 +771,15 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
         return lock( symbols ) || DEFAULT_NUMBER_FORMATTING_SYMBOLS;
     };
 
+    const NODE_JS_EXIT_CODES =
+        lock( {
+                  NORMAL_SHUTDOWN: 0,
+                  UNCAUGHT_EXCEPTION: 1,
+                  UNHANDLED_REJECTION: 2,
+                  SIGINT: 130,
+                  SIGTERM: 143
+              } );
+
     let mod =
         {
             /**
@@ -1945,6 +1954,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             STANDARD_CONSTRUCTOR_NAMES,
 
             PRIMITIVE_TYPES,
+
+            NODE_JS_EXIT_CODES,
 
             _rxFunctionSignature,
             _rxFunction,
