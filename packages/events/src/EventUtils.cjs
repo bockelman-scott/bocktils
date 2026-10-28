@@ -17,21 +17,15 @@ const { _ud = "undefined", $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const dependencies =
-        {
-            moduleUtils,
-            constants,
-            typeUtils,
-            stringUtils
-        };
+    const dependencies = { moduleUtils, constants, typeUtils, stringUtils };
 
     const { ModuleEvent, ToolBocksModule, populateOptions } = moduleUtils;
 
     const { _mt_str, _fun, _obj, no_op, ignore, S_WARN, S_ERROR } = constants;
 
-    const { isNull, isBoolean, isFunction, isObject, getClassName, firstMatchingType } = typeUtils;
+    const { isNull, isObject, isNonNullObject, isBoolean, isFunction, getClassName, firstMatchingType } = typeUtils;
 
-    const { asString, capitalize, uncapitalize } = stringUtils;
+    const { asString, capitalize, uncapitalize, toBool } = stringUtils;
 
     const modName = "EventUtils";
 
@@ -42,7 +36,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const NO_HANDLER = function( pEvt, pData )
     {
-        const msg = "No handler found for event," + pEvt.type + ", Fired on" + pEvt.target;
+        const msg = "No handler found for event," + pEvt?.type + ", Fired on" + pEvt?.target;
 
         toolBocksModule.reportError( new Error( msg ), msg, S_WARN, modName + "::NO_HANDLER" );
 
@@ -231,7 +225,8 @@ const { _ud = "undefined", $scope } = constants;
 
     function resolveEventOptions( pOptions )
     {
-        return Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, isBoolean( pOptions ) ? { capture: pOptions } : populateOptions( pOptions, DEFAULT_HANDLER_OPTIONS ) );
+        const options = (isBoolean( pOptions ) ? { capture: toBool( pOptions ) } : isNonNullObject( pOptions ) ? { ...(pOptions ?? DEFAULT_HANDLER_OPTIONS) } : DEFAULT_HANDLER_OPTIONS);
+        return { ...DEFAULT_HANDLER_OPTIONS, ...options };
     }
 
     const generateHandlerOptions = function( pCapture = DEFAULT_HANDLER_OPTIONS["capture"],
@@ -247,7 +242,7 @@ const { _ud = "undefined", $scope } = constants;
                 signal: pSignal
             };
 
-        return populateOptions( options, DEFAULT_HANDLER_OPTIONS );
+        return { ...DEFAULT_HANDLER_OPTIONS, ...(options ?? DEFAULT_HANDLER_OPTIONS) };
     };
 
     const generateAbortController = function( pOnAbort = no_op )
@@ -386,9 +381,11 @@ const { _ud = "undefined", $scope } = constants;
         {
             super();
 
-            this.#options = Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, populateOptions( resolveEventOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
+            const options = (isBoolean( pOptions ) ? { capture: toBool( pOptions ) } : isNonNullObject( pOptions ) ? { ...(pOptions ?? DEFAULT_HANDLER_OPTIONS) } : DEFAULT_HANDLER_OPTIONS);
 
-            if ( !isNull( pObject ) && isObject( pObject ) )
+            this.#options = { ...DEFAULT_HANDLER_OPTIONS, ...options };
+
+            if ( isNonNullObject( pObject ) )
             {
                 Dispatcher.bindDispatcher( pObject, this, this.#options );
                 this.#delegate = pObject;
@@ -436,13 +433,16 @@ const { _ud = "undefined", $scope } = constants;
          */
         buildHandler( pObject, pEventName, pOptions = DEFAULT_HANDLER_OPTIONS, pThis )
         {
-            const options = Object.assign( { ...this.options }, populateOptions( resolveEventOptions( pOptions ), this.options ) );
-            return buildHandler( pObject, resolveEventName( pEventName ), options, firstMatchingType( _obj, pThis, this.delegate, this ) );
+            const options = resolveEventOptions( pOptions );
+            return buildHandler( pObject,
+                                 resolveEventName( pEventName ),
+                                 options,
+                                 firstMatchingType( _obj, pThis, this.delegate, this ) );
         }
 
         replaceEventHandler( pEventName, pHandler, pOptions )
         {
-            const options = Object.assign( { ...this.options }, populateOptions( resolveEventOptions( pOptions ), this.options ) );
+            const options = resolveEventOptions( pOptions );
             replaceEventHandler( this, resolveEventName( pEventName ), pHandler, options );
         }
 
@@ -477,11 +477,11 @@ const { _ud = "undefined", $scope } = constants;
 
     Dispatcher.bindDispatcher = function( pObject, pDispatcher, pOptions )
     {
-        const opts = Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, populateOptions( resolveEventOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
+        const opts = resolveEventOptions( pOptions );
 
         const dispatcher = pDispatcher instanceof Dispatcher ? pDispatcher : new Dispatcher( opts );
 
-        const obj = isObject( pObject ) && !isNull( pObject ) ? (pObject || {}) : {};
+        const obj = isNonNullObject( pObject ) ? (pObject ?? {}) : {};
 
         if ( obj === dispatcher )
         {
@@ -499,7 +499,7 @@ const { _ud = "undefined", $scope } = constants;
             const options = Object.assign( { ...opts }, populateOptions( resolveEventOptions( pOptions ), opts ) );
 
             const eventName = resolveEventName( pEventName );
-            const handler = dispatcher.buildHandler( pHandler, eventName, options, obj || dispatcher.delegate );
+            const handler = dispatcher.buildHandler( pHandler, eventName, options, obj ?? dispatcher.delegate );
 
             return { options, handler, eventName };
         }
@@ -566,6 +566,91 @@ const { _ud = "undefined", $scope } = constants;
         return obj;
     };
 
+
+    const EVENTS =
+        {
+            ERROR: "error",
+            ATTRIBUTE_CHANGED: "attributeChanged",
+            ATTRIBUTE_DELETED: "attributeDeleted",
+            PROGRESS: "progress",
+            COMPLETED: "completed"
+        };
+
+    class CustomEventRegistry
+    {
+        #eventTypes = new Map();
+
+        constructor()
+        {
+            const entries = Object.entries( EVENTS ) ?? objectEntries( EVENTS );
+            entries.forEach( entry =>
+                             {
+                                 let key = ObjectEntry.getKey( entry ) || entry[0];
+                                 let value = ObjectEntry.getValue( entry ) ?? entry[1];
+
+                                 attempt( () => this.registerEventType( key, value ) );
+                             } );
+        };
+
+        registerEventType( pKey, pValue )
+        {
+            const key = ucase( toSnakeCase( asString( pKey || pValue, true ) ) );
+            const value = asString( pValue || toCamelCase( pKey || key ), true );
+
+            this.#eventTypes.set( key, value );
+            EVENTS[key] = value;
+        }
+
+        unregisterEventType( pKey )
+        {
+            const keyA = ucase( toSnakeCase( asString( pKey, true ) ) );
+            const keyB = toPascalCase( asString( pKey, true ) );
+            const keyC = toCamelCase( asString( pKey, true ) );
+
+            attempt( () => this.#eventTypes.delete( keyA ) );
+            attempt( () => this.#eventTypes.delete( keyB ) );
+            attempt( () => this.#eventTypes.delete( keyC ) );
+
+            attempt( () => delete EVENTS[keyA] );
+            attempt( () => delete EVENTS[keyB] );
+            attempt( () => delete EVENTS[keyC] );
+        }
+
+        getEventTypeKeys()
+        {
+            return this.#eventTypes.keys();
+        }
+
+        get keys()
+        {
+            return this.getEventTypeKeys();
+        }
+
+        getEventTypeNames()
+        {
+            return this.#eventTypes.values();
+        }
+
+        get names()
+        {
+            return this.getEventTypeNames();
+        }
+
+        getEventType( pKey )
+        {
+            const keyA = ucase( toSnakeCase( asString( pKey, true ) ) );
+            const keyB = toPascalCase( asString( pKey, true ) );
+
+            let eventType = asString( this.#eventTypes.get( keyA ) || this.#eventTypes.get( keyB ), true );
+            eventType = eventType || asString( this.#eventTypes.get( keyB ), true );
+            eventType = eventType || this.getEventTypeNames().find( keyB ) || this.getEventTypeNames().find( keyA );
+            eventType = eventType || this.getEventTypeKeys().find( keyA ) || this.getEventTypeKeys().find( keyB );
+
+            return toPascalCase( asString( eventType || pKey, true ) );
+        }
+    }
+
+    const CUSTOM_EVENT_REGISTRY = new CustomEventRegistry();
 
     class MemorySink
     {

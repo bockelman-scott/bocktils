@@ -21,6 +21,7 @@
             __Error,
             IllegalArgumentError,
             IllegalStateError,
+            NotImplementedError,
             CASE_SENSITIVE_COLLATOR,
             CASE_INSENSITIVE_COLLATOR,
             getCollator,
@@ -515,7 +516,7 @@
                 {
                     const entries = isMap( arg ) || isFunction( arg?.entries ) ?
                                     (arg.entries() ?? objectEntries( arg )) :
-                                    (Object.entries( arg ) ?? objectEntries( arg ));
+                                    (Object.entries( asObject( arg ) ) ?? objectEntries( arg ));
 
                     entries.forEach( entry =>
                                      {

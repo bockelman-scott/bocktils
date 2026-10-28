@@ -85,6 +85,8 @@ const { _ud = "undefined", $scope } = constants;
 
     const { asJson, parseJson } = jsonUtils;
 
+    const { ToolBocksObject } = require( "../../core/src/ToolBocksObject.cjs" );
+
     const modName = "BockEntities";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
@@ -338,18 +340,11 @@ const { _ud = "undefined", $scope } = constants;
         return false;
     };
 
-    class BockEntity
+    class BockEntity extends ToolBocksObject
     {
-        // this allows each of our Entities, if necessary, to behave like an EventTarget, if required
-        #zTarget = new EventTarget();
-
-        // used rarely to shuttle temporary values between methods
-        // attributes are not included in equality comparisons or persisted.
-        // to save memory, we avoid instantiating a new Map until we need one.
-        #attributes; // = new Map();
-
-        constructor()
+        constructor( ...pArgs )
         {
+            super( ...pArgs );
         }
 
         static get [Symbol.species]()
@@ -359,71 +354,30 @@ const { _ud = "undefined", $scope } = constants;
 
         static from( pSource )
         {
-            let species = this[Symbol.species];
-            let obj = new species();
-            let source = asObject( pSource ) || attempt( () => asJson( pSource ) ) || {};
-            return populateProperties( obj, source );
+            const species = this[Symbol.species];
+
+            const source = asObject( pSource );
+
+            const args = asArray( [...this.attributes] );
+
+            const instance = isClass( species ) ? new species( ...args ) : Object.create( species ?? {} );
+
+            return attempt( () => populateProperties( instance, source ) ) ?? instance;
         }
 
-        setAttribute( pName, pValue )
+        toLiteral( pOmitFunctions = false )
         {
-            const key = asString( pName, true );
-
-            if ( !isBlank( key ) )
-            {
-                this.#attributes = !isNull( this.#attributes ) && isMap( this.#attributes ) ? this.#attributes : new Map();
-
-                if ( isNull( pValue ) )
-                {
-                    this.#attributes.delete( key );
-                }
-                else
-                {
-                    this.#attributes.set( key, pValue );
-                }
-
-                return new Map( objectEntries( this.#attributes ) );
-            }
-
-            return null;
+            return super.toLiteral( pOmitFunctions );
         }
 
-        getAttribute( pName )
+        toJson()
         {
-            const key = asString( pName, true );
-
-            if ( !isBlank( key ) )
-            {
-                this.#attributes = !isNull( this.#attributes ) && isMap( this.#attributes ) ? this.#attributes : new Map();
-
-                return this.#attributes.get( key );
-            }
-
-            return null;
+            return attempt( () => asJson( this.toLiteral( true ) ) );
         }
 
-        hasAttribute( pName )
+        toJSON()
         {
-            const key = asString( pName, true );
-
-            if ( !isBlank( key ) )
-            {
-                this.#attributes = !isNull( this.#attributes ) && isMap( this.#attributes ) ? this.#attributes : new Map();
-
-                return this.#attributes.has( key );
-            }
-
-            return false;
-        }
-
-        toObjectLiteral( pOptions )
-        {
-            return toObjectLiteral( this, pOptions );
-        }
-
-        toJson( pOptions )
-        {
-            return attempt( () => asJson( this.toObjectLiteral( pOptions ) ) );
+            return attempt( () => asJson( this.toLiteral( true ) ) );
         }
 
         isIdentical( pOther )
@@ -439,7 +393,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         dispatchEvent( pEvt )
         {
-            return this.#zTarget.dispatchEvent( pEvt );
+            return super.dispatchEvent( pEvt );
         }
 
         /**
@@ -453,7 +407,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         addEventListener( pEvt, pHandler, pOptions )
         {
-            this.#zTarget.addEventListener( pEvt, pHandler, pOptions );
+            super.addEventListener( pEvt, pHandler, pOptions );
         }
 
         /**
@@ -466,7 +420,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         removeEventListener( pEvt, pHandler, pOptions )
         {
-            this.#zTarget.removeEventListener( pEvt, pHandler, pOptions );
+            super.removeEventListener( pEvt, pHandler, pOptions );
         }
 
         toString()
@@ -512,9 +466,9 @@ const { _ud = "undefined", $scope } = constants;
     {
         #id = 0;
 
-        constructor( pId )
+        constructor( pId, ...pArgs )
         {
-            super();
+            super( ...pArgs );
             this.#id = asInt( pId );
         }
 
@@ -539,11 +493,37 @@ const { _ud = "undefined", $scope } = constants;
             return same( this, pOther, { strict: true, type: getClass( this ) } );
         }
 
+        /**
+         * Returns the class/constructor.
+         *
+         * Can be used to clone objects.
+         *
+         * Subclasses should override this static method.
+         *
+         * It is possible to return a value other than 'this'
+         * to achieve certain kinds of strategy patterns
+         * or subclass-specific cloning patterns.
+         *
+         * @returns {ToolBocksObject}
+         */
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         static from( pObject )
         {
+            const species = this[Symbol.species];
+
             const source = asObject( pObject ) || {};
-            const instance = new BockIdentified( source?.id || source.Id );
-            return populateProperties( instance, source );
+
+            const id = source?.id || readProperty( source, "id", "native", "native.id", "filevine_id.native" );
+
+            const args = asArray( [...this.attributes] );
+
+            const instance = (isClass( species ) ? attempt( () => new species( id, ...args ) ) : new BockIdentified( id, ...args )) ?? new BockIdentified( id, ...args );
+
+            return attempt( () => populateProperties( instance, source ) ) ?? instance;
         }
     }
 
@@ -551,9 +531,9 @@ const { _ud = "undefined", $scope } = constants;
     {
         #name;
 
-        constructor( pId, pName )
+        constructor( pId, pName, ...pArgs )
         {
-            super( pId );
+            super( pId, ...pArgs );
             this.#name = asString( pName, true );
         }
 
@@ -571,14 +551,39 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
+        /**
+         * Returns the class/constructor.
+         *
+         * Can be used to clone objects.
+         *
+         * Subclasses should override this static method.
+         *
+         * It is possible to return a value other than 'this'
+         * to achieve certain kinds of strategy patterns
+         * or subclass-specific cloning patterns.
+         *
+         * @returns {ToolBocksObject}
+         */
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         static from( pObject )
         {
+            const species = this[Symbol.species];
+
             const source = asObject( pObject ) || {};
 
-            const instance = new BockNamed( source?.id || source?.Id,
-                                            source?.name || source?.Name );
+            const id = source?.id || readProperty( source, "id", "native", "native.id", "filevine_id.native" );
 
-            return populateProperties( instance, source );
+            const name = source?.name || readProperty( source, "name", "full_name", "code", "description" );
+
+            const args = asArray( [...this.attributes] );
+
+            const instance = (isClass( species ) ? attempt( () => new species( id, name, ...args ) ) : new BockNamed( id, name, ...args )) ?? new BockNamed( id, name, ...args );
+
+            return attempt( () => populateProperties( instance, source ) ) ?? instance;
         }
     }
 
@@ -587,9 +592,9 @@ const { _ud = "undefined", $scope } = constants;
         #code;
         #description;
 
-        constructor( pId, pName, pCode, pDescription )
+        constructor( pId, pName, pCode, pDescription, ...pArgs )
         {
-            super( pId, pName );
+            super( pId, pName, ...pArgs );
             this.#code = asString( pCode, true );
             this.#description = asString( pDescription, true );
         }
@@ -613,229 +618,48 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
+        /**
+         * Returns the class/constructor.
+         *
+         * Can be used to clone objects.
+         *
+         * Subclasses should override this static method.
+         *
+         * It is possible to return a value other than 'this'
+         * to achieve certain kinds of strategy patterns
+         * or subclass-specific cloning patterns.
+         *
+         * @returns {ToolBocksObject}
+         */
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         static from( pObject )
         {
+            const species = this[Symbol.species];
+
             const source = asObject( pObject ) || {};
 
-            const instance = new BockDescribed( source?.id || source?.Id,
-                                                source?.name || source?.Name,
-                                                source?.code || source?.Code,
-                                                source?.description || source?.Description );
+            const id = source?.id || readProperty( source, "id", "native", "native.id", "filevine_id.native" );
 
-            return populateProperties( instance, source );
+            const name = source?.name || readProperty( source, "name", "full_name", "code", "description" );
+
+            const code = source?.code || readProperty( source, "code", "abbreviation", "short_name", "short_description", "description" );
+
+            const description = source?.description || readProperty( source, "description", "comment", "comments", "note", "notes", "explanation", "long_name" );
+
+            const args = asArray( [...this.attributes] );
+
+
+            const instance = (isClass( species ) ?
+                              attempt( () => new species( id, name, code, description, ...args ) ) :
+                              new BockDescribed( id, name, code, description, ...args )) ?? new BockDescribed( id, name, code, description, ...args );
+
+            return attempt( () => populateProperties( instance, source ) ) ?? instance;
         }
     }
-
-    /**
-     * Represents a dependency in the system, implementing the INamed interface.
-     *
-     * The Dependency class is used to define entities or components
-     * that can be 'injected' into RequestHandlers or Services
-     *
-     * @class
-     * @augments BockNamed
-     * @extends BockNamed
-     *
-     * @class
-     *
-     * @param {string} pId - The unique identifier for the dependency.
-     * @param {string} pName - The name of the dependency.
-     */
-    class Dependency extends BockNamed
-    {
-        #component;
-        #options;
-
-        /**
-         * Constructs an instance of the class with the provided id, name, component, and options.
-         *
-         * @param {string|number} pId                The unique identifier for the instance.
-         * @param {string} pName                     The name of the instance.
-         * @param {Object|function} pComponent       The component represented by this instance.
-         * @param {Object} [pOptions={}]             Optional component-specific parameters
-         *                                           to configure the instance.
-         *
-         * @return {Object} An instance of the class.
-         */
-        constructor( pId, pName, pComponent, pOptions = {} )
-        {
-            super( pId, pName );
-
-            this.#component = isNonNullObject( pComponent ) || isClass( pComponent ) ? pComponent : this;
-
-            this.#options = populateOptions( pOptions || {}, {} );
-        }
-
-        get options()
-        {
-            return populateOptions( {}, this.#options || {} );
-        }
-
-        // subclasses may need to clone or create a component to return
-        get component()
-        {
-            if ( isNonNullObject( this.#component ) )
-            {
-                if ( isFunction( this.#component.clone ) )
-                {
-                    return this.#component.clone( this.options );
-                }
-                return this.#component;
-            }
-            else if ( isClass( this.#component ) )
-            {
-                return new this.#component( this.options );
-            }
-
-            return this.#component;
-        }
-
-        clone()
-        {
-            return new Dependency( this.id, this.name, this.component, this.options );
-        }
-
-        async start( ...pArgs )
-        {
-            let comp = this.component;
-            if ( isFunction( comp?.start ) )
-            {
-                return await asyncAttempt( async() => comp.start( ...pArgs ) );
-            }
-            else if ( isFunction( comp?.init ) )
-            {
-                return await asyncAttempt( async() => comp.init( ...pArgs ) );
-            }
-            return this;
-        }
-
-        async init( ...pArgs )
-        {
-            return await this.start( ...pArgs );
-        }
-
-        async stop( ...pArgs )
-        {
-            let comp = this.component;
-            if ( isFunction( comp?.stop ) )
-            {
-                return await asyncAttempt( async() => comp.stop( ...pArgs ) );
-            }
-            return this;
-        }
-
-        async connect( ...pArgs )
-        {
-            let comp = this.component;
-            if ( isFunction( comp?.connect ) )
-            {
-                return await asyncAttempt( async() => comp.connect( ...pArgs ) );
-            }
-            return this;
-        }
-
-        async disconnect( ...pArgs )
-        {
-            let comp = this.component;
-            if ( isFunction( comp?.disconnect ) )
-            {
-                return await asyncAttempt( async() => comp.disconnect( ...pArgs ) );
-            }
-            return this;
-        }
-    }
-
-    class Dependencies
-    {
-        #mapById = new Map();
-        #mapByName = new Map();
-
-        constructor( ...pDependencies )
-        {
-            const dependencies = asArray( pDependencies || [] ).filter( e => isNonNullObject( e ) && e instanceof Dependency );
-
-            for( let dependency of dependencies )
-            {
-                this.#mapById.set( dependency.id, dependency );
-                this.#mapByName.set( dependency.name, dependency );
-            }
-        }
-
-        getDependency( pKey )
-        {
-            if ( isNumeric( pKey ) )
-            {
-                return this.#mapById.get( asInt( pKey ) ) || this.#mapByName.get( asString( pKey, true ) );
-            }
-            return this.#mapByName.get( asString( pKey, true ) );
-        }
-
-        getComponent( pKey )
-        {
-            const dependency = this.getDependency( pKey );
-            return dependency.component || dependency;
-        }
-
-        clone()
-        {
-            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
-
-            values = values.filter( e => isNonNullObject( e ) && e instanceof Dependency );
-
-            values = values.map( e => e.clone() );
-
-            return new Dependencies( ...values );
-        }
-
-        async startAll( ...pArgs )
-        {
-            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
-            for( const dependency of values )
-            {
-                await asyncAttempt( async() => dependency.start( ...pArgs ) );
-            }
-            return this;
-        }
-
-        async stopAll( ...pArgs )
-        {
-            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
-            for( const dependency of values )
-            {
-                await asyncAttempt( async() => dependency.stop( ...pArgs ) );
-            }
-            return this;
-        }
-
-        async disconnectAll( ...pArgs )
-        {
-            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
-            for( const dependency of values )
-            {
-                await asyncAttempt( async() => dependency.disconnect( ...pArgs ) );
-            }
-            return this;
-        }
-    }
-
-    Dependencies.resolveDependencies = function( pDependencies )
-    {
-        if ( isNonNullObject( pDependencies ) )
-        {
-            if ( pDependencies instanceof Dependencies )
-            {
-                return pDependencies;
-            }
-            else
-            {
-                return new Dependencies( ...(asArray( pDependencies || [] )).filter( e => isNonNullObject( e ) && e instanceof Dependency ) );
-            }
-        }
-        else
-        {
-            return new Dependencies();
-        }
-    };
 
     let mod =
         {
@@ -844,16 +668,12 @@ const { _ud = "undefined", $scope } = constants;
                     BockEntity,
                     BockIdentified,
                     BockNamed,
-                    BockDescribed,
-                    Dependency,
-                    Dependencies
+                    BockDescribed
                 },
             BockEntity,
             BockIdentified,
             BockNamed,
             BockDescribed,
-            Dependency,
-            Dependencies,
             asObject,
             identical,
             same
