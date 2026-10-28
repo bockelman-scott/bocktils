@@ -6,8 +6,6 @@ const { SimpleLogger } = logUtils;
 
 const
     {
-        Dependency,
-        Dependencies,
         RequestHandler,
         RequestHandlerFactory,
         PathHandlerFactory,

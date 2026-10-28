@@ -1,0 +1,28 @@
+{
+  "servers": [
+    {
+      "port": 3000,
+      "use_ssl": true,
+      "key_path": "",
+      "cert_path": "",
+      "filter_factory": {
+        "module_path": "./ServerConfiguration.js",
+        "factory_class": "RequestFilterFactory"
+      },
+      "filters": ["AuthenticationFilter", "Throttler", "RequestDecorator"],
+      "handler_factory": {
+        "module_path": "./ServerConfiguration.js",
+        "factory_class": "RequestHandlerFactory"
+      },
+      "route_prefix": "api/v1",
+      "routes": [
+        {
+          "path": "resource",
+          "method": "POST",
+          "filters": [],
+          "handler": "createResource"
+        }
+      ]
+    }
+  ]
+}

@@ -27,7 +27,7 @@ const { _ud, $scope } = constants;
 
     const { asArray } = arrayUtils;
 
-    const { Dependency, Dependencies } = entityUtils;
+    const { Dependency, Dependencies } = require("@toolbocks/dep-injection");
 
     const
         {
