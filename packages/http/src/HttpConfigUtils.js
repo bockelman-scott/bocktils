@@ -2099,38 +2099,38 @@ const { _ud = "undefined", $scope } = constants;
 
             const entries = objectEntries( asObject( pModel ?? config ?? {} ) );
 
-            entries.forEach( entry =>
-                             {
-                                 if ( !isNull( entry ) )
-                                 {
-                                     const key = ObjectEntry.getKey( entry );
+            attempt( () => entries.forEach( entry =>
+                                            {
+                                                if ( !isNull( entry ) )
+                                                {
+                                                    const key = ObjectEntry.getKey( entry );
 
-                                     const value = ObjectEntry.getValue( entry );
+                                                    const value = ObjectEntry.getValue( entry );
 
-                                     const descriptor = me.resolveDescriptor( value, config[key], key );
+                                                    const descriptor = attempt( () => me.resolveDescriptor( value, config[key], key ) );
 
-                                     const val = me.getConfigValue( key );
+                                                    const val = attempt( () => me.getConfigValue( key ) ) ?? value;
 
-                                     const cfgValue = attempt( () => me.resolveValue( descriptor, val, key ) );
+                                                    const cfgValue = attempt( () => me.resolveValue( descriptor, val, key ) );
 
-                                     if ( !isNull( cfgValue ) )
-                                     {
-                                         if ( isNull( config[key] ) )
-                                         {
-                                             attemptSilent( () => config[key] = cfgValue || config[key] );
-                                             if ( isNull( config[key] ) && !descriptor?.required )
-                                             {
-                                                 attempt( () => delete config[key] );
-                                             }
-                                         }
-                                         else if ( isNonNullObject( config[key] ) )
-                                         {
-                                             let cfgObject = isNonNullObject( cfgValue ) ? cfgValue : {};
-                                             attemptSilent( () => config[key] = { ...(cfgObject || {}), ...(config[key]) } );
-                                         }
-                                     }
-                                 }
-                             } );
+                                                    if ( !isNull( cfgValue ) )
+                                                    {
+                                                        if ( isNull( config[key] ) )
+                                                        {
+                                                            attemptSilent( () => config[key] = cfgValue || config[key] );
+                                                            if ( isNull( config[key] ) && !descriptor?.required )
+                                                            {
+                                                                attempt( () => delete config[key] );
+                                                            }
+                                                        }
+                                                        else if ( isNonNullObject( config[key] ) )
+                                                        {
+                                                            let cfgObject = isNonNullObject( cfgValue ) ? cfgValue : {};
+                                                            attemptSilent( () => config[key] = { ...(cfgObject ?? {}), ...(config[key]) } );
+                                                        }
+                                                    }
+                                                }
+                                            } ) );
             return config;
         }
     }

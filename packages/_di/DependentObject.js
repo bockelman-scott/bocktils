@@ -609,8 +609,8 @@
     const INITIALIZABLE_FILTER = (( e ) => Dependency.isDependency( e ) || isComponentInitializable( e ));
     const DISPOSABLE_FILTER = (( e ) => Dependency.isDependency( e ) || isComponentDisposable( e ));
 
-    const NOT_INITIALIZED_FILTER = (( e ) => !(e?.initialized));
-    const IS_INITIALIZED_FILTER = (( e ) => e?.initialized);
+    const NOT_INITIALIZED_FILTER = (( e ) => !(e?.initialized) && isComponentInitializable( e ));
+    const IS_INITIALIZED_FILTER = (( e ) => e?.initialized || !isComponentInitializable( e ));
 
     const MAPPER_DEPENDENCY_NAME = (( e ) => isFunction( e?.toString ) ? attempt( () => e.toString() ) || asString( e?.name || e?.id || getClassName( e ), true ) : asString( e?.name || e?.id || getClassName( e ), true ));
 
@@ -869,7 +869,7 @@
         {
             const deps = asArray( this.#dependencies ?? [] );
 
-            return isDate( this.#initDate ) && ($ln( deps ) <= 0 || deps.every( e => e?.initialized ));
+            return isDate( this.#initDate ) && ($ln( deps ) <= 0 || deps.every( e => e?.initialized || !isComponentInitializable( e ) ));
         }
 
         /**
@@ -908,7 +908,7 @@
             {
                 if ( isNonNullObject( dependency ) && (Dependency.isDependency( dependency ) || isComponentInitializable( dependency )) )
                 {
-                    if ( !dependency?.initialized )
+                    if ( !dependency?.initialized && isComponentInitializable( dependency ) )
                     {
                         if ( Dependency.isDependency( dependency ) || isFunction( dependency?.init ) )
                         {

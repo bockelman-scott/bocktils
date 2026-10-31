@@ -1,6 +1,8 @@
 {
   "servers": [
     {
+      "id": 0,
+      "name": "",
       "port": 3000,
       "use_ssl": true,
       "key_path": "",
@@ -20,7 +22,7 @@
           "path": "resource",
           "method": "POST",
           "filters": [],
-          "handler": "createResource"
+          "handlers": ["createResource"]
         }
       ]
     }
