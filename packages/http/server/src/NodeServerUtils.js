@@ -44,7 +44,7 @@ const secretsModule = require( "@toolbocks/secrets" );
 
 // const databaseUtils = require( "./DatabaseUtils.js" );
 
-const requestHandlerUtils = require( "../src/handler/RequestHandlerFactory.cjs" );
+const requestHandlerUtils = require( "../src/HandlerFactory.js" );
 
 const { constants } = core;
 

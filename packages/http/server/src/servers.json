@@ -8,21 +8,43 @@
       "key_path": "",
       "cert_path": "",
       "filter_factory": {
-        "module_path": "./ServerConfiguration.js",
+        "module_path": "",
         "factory_class": "RequestFilterFactory"
       },
-      "filters": ["AuthenticationFilter", "Throttler", "RequestDecorator"],
+      "filters": [
+        {
+          "name": "AuthenticationFilter",
+          "module_path": "",
+          "function_name": "authenticateRequest"
+        },
+        {
+          "name": "Throttler",
+          "module_path": "",
+          "function_name": "throttleRequest"
+        },
+        {
+          "name": "RequestDecorator",
+          "module_path": "",
+          "function_name": "decorateRequest"
+        }
+      ],
+      "route_prefix": "api/v1",
       "handler_factory": {
-        "module_path": "./ServerConfiguration.js",
+        "module_path": "",
         "factory_class": "RequestHandlerFactory"
       },
-      "route_prefix": "api/v1",
       "routes": [
         {
           "path": "resource",
           "method": "POST",
           "filters": [],
-          "handlers": ["createResource"]
+          "handlers": [
+            {
+              "name": "createResource",
+              "module_path": "",
+              "function_name": "createResource"
+            }
+          ]
         }
       ]
     }
