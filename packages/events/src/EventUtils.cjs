@@ -79,7 +79,7 @@ const { _ud = "undefined", $scope } = constants;
     function findHandlerMethod( pObject, pEventName )
     {
         const evtName = resolveEventName( pEventName );
-        return firstMatchingType( _fun, pObject?.[S_ON + evtName], pObject?.[S_ON + capitalize( evtName )], pObject?.["handle" + capitalize( evtName )], (isHandlerFunction( pObject ) ? pObject : null) );
+        return firstMatchingType( _fun, pObject?.[S_ON + evtName], pObject?.[S_ON + capitalize( evtName )], pObject?.["handle" + capitalize( evtName )], pObject?.handleEvent, (isHandlerFunction( pObject ) ? pObject : null) );
     }
 
     function hasHandlerMethod( pObject, pEventName )
@@ -132,7 +132,8 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pEventName, pData )
         {
-            super( resolveEventName( pEventName ), resolveEventData( resolveEventName( pEventName ), pData ) );
+            super( resolveEventName( pEventName ),
+                   resolveEventData( resolveEventName( pEventName ), pData ) );
 
             this.#type = resolveEventName( pEventName );
             this.#detail = resolveEventData( this, pData );
@@ -160,6 +161,7 @@ const { _ud = "undefined", $scope } = constants;
     }
 
     /**
+     * Returns true if the specified object has a method that can or will be called for the specified event.
      *
      * @param {object|Function} pObject
      * @param {string} pEventName
