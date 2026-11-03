@@ -1,11 +1,50 @@
 (function exposeModule()
 {
-    const express = require('express');
+    /**
+     * Imports the Middleware framework
+     */
+    const express = require( "express" );
 
-    const fs = require('fs');
+    /**
+     * Imports the filesystem library
+     */
+    const fs = require( "fs" );
 
-    const http = require('http');
-    const https = require('https');
+    /**
+     * Import the HTTP modules
+     */
+    const http = require( "http" );
+    const https = require( "https" );
+
+    /**
+     * Imports the middleware to read a request body
+     */
+    const bodyParser = require( "body-parser" );
+
+    /**
+     * Imports the middleware to read a multipart form request body
+     */
+    const multipartParser = require( "multer" );
+
+    /**
+     * Imports the middleware to read cookies from a request
+     */
+    const cookieParser = require( "cookie-parser" );
+
+    /**
+     * Imports functionality related to the current operating system (e.g., Windows or Linux)
+     */
+    const os = require( "os" );
+
+    /**
+     * Allows monitoring the health of the server
+     */
+    const perfUtils = require( "perf_hooks" );
+
+    /**
+     * Import the ToolBocks Performance-related module
+     */
+    const performanceModule = require( "@toolbocks/performance" );
 
     const toolbocks = require( "@toolbocks/core" );
 
@@ -43,6 +82,8 @@
     const { asObject } = jsonUtils;
 
     const { SimpleLogger, SourcedSimpleLogger } = logUtils;
+
+    const { getPerformanceTimer } = performanceModule;
 
     const SIMPLE_LOGGER = new SimpleLogger( ToolBocksModule.getGlobalLogger(), console );
 
