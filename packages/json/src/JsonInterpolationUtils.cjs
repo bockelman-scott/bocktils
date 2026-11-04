@@ -125,6 +125,7 @@ const { _ud = "undefined", $scope } = constants;
             isNonNullObject,
             isNonNullValue,
             isPopulated,
+            isPopulatedObject,
             isError = Error.isError,
             toIterable,
             toObjectLiteral,
@@ -168,7 +169,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const NO_VARIABLE_DEFINED = "~~no-variable-defined~~";
 
-    const DEFAULT_CRITERIA = ( e ) => isNonNullObject( e ) && isPopulated( e );
+    const DEFAULT_CRITERIA = ( e ) => isNonNullObject( e );
 
     const firstValidObject = function( ...pObjects )
     {
@@ -1540,7 +1541,7 @@ const { _ud = "undefined", $scope } = constants;
             return attempt( () => _resolveObject( pObject.deref(), pOptions ) );
         }
 
-        if ( isPopulated( pObject ) || isArray( pObject ) )
+        if ( isNonNullObject( pObject ) || isArray( pObject ) )
         {
             return pObject;
         }
@@ -1641,7 +1642,7 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         const root = _resolveRoot( pRoot, options?.root, obj );
-        options.root = root;
+        options.root = root ?? options.root ?? obj;
 
         const current = isObject( obj ) ? obj : options.current;
         options.current = current;
