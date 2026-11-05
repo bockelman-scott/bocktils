@@ -944,25 +944,30 @@
 
         if ( isNonNullObject( data ) )
         {
+            if ( data instanceof ServerConfiguration )
+            {
+                return data;
+            }
+
             const port = asInt( data.port || readProperty( data, "port", "server_port" ) || 3000 ) || 3000;
 
             const id = asInt( data.id || readProperty( data, "id", "server_id" ) || nextServerId() );
             const name = asString( data.name || readProperty( data, "name", "server_name" ) || `Server_${port}`, true );
 
-            const useSsl = toBool( data["use_ssl"] || readProperty( data, "use_ssl", "is_use_ssl", "ssl" ) );
-            const keyPath = data["key_path"] || data.keyPath || readProperty( data, "key_path", "ssl_key_path", "key", "ssl_key" );
-            const certPath = data["cert_path"] || data.certPath || readProperty( data, "cert_path", "ssl_cert_path", "certificate_path", "ssl_certificate_path" );
+            const useSsl = toBool( data.useSsl || data["use_ssl"] || readProperty( data, "use_ssl", "is_use_ssl", "ssl" ) );
+            const keyPath = data.keyPath || data["key_path"] || data.keyPath || readProperty( data, "key_path", "ssl_key_path", "key", "ssl_key" );
+            const certPath = data.certPath || data["cert_path"] || data.certPath || readProperty( data, "cert_path", "ssl_cert_path", "certificate_path", "ssl_certificate_path" );
             const sslConfig = new SslConfiguration( keyPath, certPath );
 
-            const filterFactoryConfig = FilterFactoryConfiguration.from( data["filter_factory"] ?? readProperty( data, "filter_factory", "factory" ) );
+            const filterFactoryConfig = FilterFactoryConfiguration.from( data.filterFactoryConfiguration ?? data["filter_factory"] ?? readProperty( data, "filter_factory", "factory" ) );
 
-            let filters = asArray( data["filters"] ?? readProperty( data, "filters", "filter_configs" ) );
+            let filters = asArray( data.filtersConfigurations ?? data["filters"] ?? readProperty( data, "filters", "filter_configs" ) );
             filters = filters.filter( e => !isNull( e ) && (isString( e ) || isObject( e )) ).map( FilterConfiguration.from ).filter( isNonNullObject );
 
-            const handlerFactoryConfig = HandlerFactoryConfiguration.from( data["handler_factory"] ?? readProperty( data, "handler_factory", "factory" ) );
+            const handlerFactoryConfig = HandlerFactoryConfiguration.from( data.handlerFactoryConfiguration ?? data["handler_factory"] ?? readProperty( data, "handler_factory", "factory" ) );
 
 
-            const routeFactoryConfiguration = RouteFactoryConfiguration.from( data );
+            const routeFactoryConfiguration = RouteFactoryConfiguration.from( data.routeFactoryConfiguration ?? data ) ?? data.routeFactoryConfiguration ?? RouteFactoryConfiguration.from( data ?? pData );
 
             return new ServerConfiguration( id,
                                             name,
@@ -978,7 +983,6 @@
         return null;
 
     };
-
 
     function parseServerConfiguration( pJson )
     {
