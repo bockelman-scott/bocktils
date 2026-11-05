@@ -89,16 +89,29 @@
 
     const DEFAULT_LOGGER = SourcedSimpleLogger.adapt( SIMPLE_LOGGER, "ServerFactory" );
 
-    class ServerFactory extends DependentObject
+    class ServerFactory
     {
+        #dependencyRegistry;
 
-        constructor( pDependencies, pOptions, ...pArgs )
+        constructor( pDependencyRegistry )
         {
-            super( pDependencies, pOptions, ...pArgs );
+            this.#dependencyRegistry = pDependencyRegistry;
         }
 
-        createServer( pServerConfiguration )
+        get dependencyRegistry()
         {
+            return this.#dependencyRegistry ?? { init: async() => this };
+        }
+
+        async getDependencyRegistry()
+        {
+            return await this.dependencyRegistry.init();
+        }
+
+        createServer( pServerConfiguration, pDependencyRegistry = this.dependencyRegistry )
+        {
+            const configuration = ServerConfiguration.from( pServerConfiguration );
+
 
         }
     }

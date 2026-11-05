@@ -4,6 +4,16 @@
     "name": "logger",
     "description": "A logger utility for logging messages to a destination"
   },
+  "BASE_64_ENCODER": {
+    "id": "base64.encoder",
+    "name": "base64Encoder",
+    "description": ""
+  },
+  "BASE_64_DECODER": {
+    "id": "base64.decoder",
+    "name": "base64Decoder",
+    "description": ""
+  },
   "SECRETS_MANAGER": {
     "id": "secrets.secretsManager",
     "name": "secretsManager",

@@ -300,7 +300,7 @@ const MAX_DEPENDENCY_DEPTH = 16;
                                                           LOGGER,
                                                           DEFAULT_LOGGER );
 
-            this.#logger = SourcedSimpleLogger.adapt( this.#logger, SimpleLogger.resolveLogSourceName( this ) );
+            this.#logger = attempt( () => SourcedSimpleLogger.adapt( this.#logger, SimpleLogger.resolveLogSourceName( this ) ) ) ?? this.#logger ?? console;
 
             attempt( () => this.registerExceptionHandlers( this.logger ).then( no_op ).catch( (this.logger ?? DEFAULT_LOGGER ?? console).error ) );
         }
@@ -320,7 +320,7 @@ const MAX_DEPENDENCY_DEPTH = 16;
                                                           LOGGER,
                                                           DEFAULT_LOGGER ) ?? this.#logger;
 
-            this.#logger = SourcedSimpleLogger.adapt( this.#logger, SimpleLogger.resolveLogSourceName( this ) );
+            this.#logger = attempt( () => SourcedSimpleLogger.adapt( this.#logger, SimpleLogger.resolveLogSourceName( this ) ) ) ?? this.#logger;
         }
 
         /**

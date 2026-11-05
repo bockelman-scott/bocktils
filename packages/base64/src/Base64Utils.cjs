@@ -549,6 +549,67 @@ const { _ud = "undefined", $scope } = constants;
         return data.map( e => String.fromCharCode( e ) ).join( _mt ).replace( _rxNullTerminator, _mt );
     }
 
+    class Base64Base
+    {
+        constructor() {}
+
+        clean( pStr, pOptions = DEFAULT_BASE64_OPTIONS )
+        {
+            return cleanBase64( pStr, pOptions );
+        }
+
+        isValid( pString, pRfcSpec = DEFAULT_VARIANT, pCleanPriorToTest = false )
+        {
+            return isValidBase64( pString, pRfcSpec ?? DEFAULT_VARIANT, pCleanPriorToTest );
+        }
+    }
+
+    class Base64Encoder extends Base64Base
+    {
+        constructor()
+        {
+            super();
+        }
+
+        encode( pData, pVariant = DEFAULT_VARIANT )
+        {
+            return encode( pData, pVariant );
+        }
+
+        toText( pBase64, pEncoding = DEFAULT_TEXT_ENCODING )
+        {
+            return toText( pBase64, pEncoding || DEFAULT_TEXT_ENCODING );
+        }
+    }
+
+    class Base64Decoder extends Base64Base
+    {
+        constructor()
+        {
+            super();
+        }
+
+        toBytes( pBase64 )
+        {
+            return toBytes( pBase64 );
+        }
+
+        decode( pBase64, pSpec = DEFAULT_VARIANT, pReturnType = Array )
+        {
+            return decode( pBase64, pSpec ?? DEFAULT_VARIANT, pReturnType ?? Array );
+        }
+
+        getMediaType( pBase64Text, pDefault )
+        {
+            return getMediaType( pBase64Text, pDefault );
+        }
+
+        getPreamble( pBase64Text )
+        {
+            return getPreamble( pBase64Text );
+        }
+    }
+
     let mod =
         {
             dependencies:
@@ -557,6 +618,11 @@ const { _ud = "undefined", $scope } = constants;
                     constants,
                     stringUtils,
                     arrayUtils
+                },
+            classes:
+                {
+                    Base64Encoder,
+                    Base64Decoder
                 },
             VALID_ENCODINGS,
             SUPPORTED_VARIANTS,
@@ -569,7 +635,9 @@ const { _ud = "undefined", $scope } = constants;
             toBase64: encode,
             toText,
             decode,
-            toBinary: decode
+            toBinary: decode,
+            Base64Encoder,
+            Base64Decoder
         };
 
     mod = toolBocksModule.extend( mod );

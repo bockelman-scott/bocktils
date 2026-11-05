@@ -1,0 +1,15 @@
+{
+  "name": "@toolbocks/registry",
+  "version": "1.0.0",
+  "description": "Provides a registry for resolving dependencies and obtaining components",
+  "main": "ToolBocksRegistry.js",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/files": "^1.0.0",
+    "@toolbocks/json": "^1.0.0",
+    "@toolbocks/logging": "^1.0.0",
+    "@toolbocks/dep-injection": "^1.0.0"
+  },
+  "author": "Scott Bockelman",
+  "license": "ISC"
+}

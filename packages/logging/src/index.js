@@ -2253,6 +2253,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                     BufferedLogger,
                     ConsoleLogger,
                     SimpleLogger,
+                    SimpleAsynchronousLogger,
+                    SourcedSimpleLogger,
+                    AsynchronousSimpleLogger: SimpleAsynchronousLogger,
                     NullLogger
                 },
             DEFAULT_TEMPLATE,

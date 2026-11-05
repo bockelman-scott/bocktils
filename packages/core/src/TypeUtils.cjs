@@ -1681,7 +1681,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      *
      * @alias module:TypeUtils.isBoolean
      */
-    const isBoolean = ( pValue ) => ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || (isNonNullObject( pValue ) && pValue instanceof Boolean);
+    const isBoolean = ( pValue ) => ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || (isPrimitiveWrapper( pValue ) && pValue instanceof Boolean);
 
     const isBoolCompatible = ( pValue ) => isBoolean( pValue ) || _booleanStrings.includes( String( _toString( pValue ) ).trim().toLowerCase() );
 
