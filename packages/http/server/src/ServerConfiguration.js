@@ -713,10 +713,14 @@
         #sslConfiguration = {};
 
         #filterFactoryConfiguration = {};
-        #filtersConfigurations = [];
+        #filterConfigurations = [];
 
         #handlerFactoryConfiguration = {};
         #routeFactoryConfiguration = [];
+
+        #parseCookies = false;
+
+        #httpCreateServerOptions = {};
 
         constructor( pId,
                      pName,
@@ -724,9 +728,11 @@
                      pUseSsl,
                      pSslConfiguration,
                      pFilterFactoryConfiguration,
-                     pFiltersConfigurations,
+                     pFilterConfigurations,
                      pHandlerFactoryConfiguration,
-                     pRouteFactoryConfiguration )
+                     pRouteFactoryConfiguration,
+                     pParseCookies,
+                     pCreateServerOptions = {} )
         {
             this.#port = asInt( pPort ) || 3000;
 
@@ -737,11 +743,15 @@
             this.#sslConfiguration = lock( SslConfiguration.from( pSslConfiguration ) );
 
             this.#filterFactoryConfiguration = lock( FilterFactoryConfiguration.from( pFilterFactoryConfiguration ) );
-            this.#filtersConfigurations = lock( asArray( pFiltersConfigurations ?? [] ).map( FilterConfiguration.from ) );
+            this.#filterConfigurations = lock( asArray( pFilterConfigurations ?? [] ).map( FilterConfiguration.from ) );
 
             this.#handlerFactoryConfiguration = lock( HandlerFactoryConfiguration.from( pHandlerFactoryConfiguration ) );
 
             this.#routeFactoryConfiguration = RouteFactoryConfiguration.from( pRouteFactoryConfiguration );
+
+            this.#parseCookies = toBool( pParseCookies );
+
+            this.#httpCreateServerOptions = asObject( pCreateServerOptions ?? {} );
         }
 
         get id()
@@ -779,14 +789,28 @@
             return asString( this.sslConfiguration?.certPath, true );
         }
 
+        get options()
+        {
+            if ( this.useSsl )
+            {
+                // TODO: I think I need to read data from the file stored at keyPath and certPath to pass in the ceateServer options.
+
+                return { ...(asObject( this.#httpCreateServerOptions ?? {} )), cert: this.certPath, key: this.keyPath };
+            }
+            else
+            {
+                return { ...(asObject( this.#httpCreateServerOptions ?? {} )) };
+            }
+        }
+
         get filterFactoryConfiguration()
         {
             return lock( FilterFactoryConfiguration.from( this.#filterFactoryConfiguration ) );
         }
 
-        get filtersConfigurations()
+        get filterConfigurations()
         {
-            return [...(asArray( this.#filtersConfigurations ?? [] ).map( FilterConfiguration.from ).map( lock ))];
+            return [...(asArray( this.#filterConfigurations ?? [] ).map( FilterConfiguration.from ).map( lock ))];
         }
 
         get handlerFactoryConfiguration()
@@ -813,7 +837,7 @@
                     keyPath: !isBlank( this.keyPath ) || !this.useSsl,
                     certPath: !isBlank( this.certPath ) || !this.useSsl,
                     handlerFactoryConfiguration: isNonNullObject( this.handlerFactoryConfiguration ) && this.handlerFactoryConfiguration instanceof HandlerFactoryConfiguration,
-                    filterFactoryConfiguration: $ln( this.filtersConfigurations ) < 1 || (isNonNullObject( this.filterFactoryConfiguration ) && this.filterFactoryConfiguration instanceof FilterFactoryConfiguration),
+                    filterFactoryConfiguration: $ln( this.filterConfigurations ) < 1 || (isNonNullObject( this.filterFactoryConfiguration ) && this.filterFactoryConfiguration instanceof FilterFactoryConfiguration),
                     routeFactoryConfiguration: isNonNullObject( this.routeFactoryConfiguration ) && this.routeFactoryConfiguration instanceof RouteFactoryConfiguration,
                     routeConfigurations: $ln( this.routeConfigurations ) > 0
                 };
@@ -842,7 +866,7 @@
                 return false;
             }
 
-            const filtersConfigs = this.filtersConfigurations;
+            const filtersConfigs = this.filterConfigurations;
 
             if ( $ln( filtersConfigs ) > 0 )
             {
@@ -871,15 +895,15 @@
 
                 if ( (isNull( ffc ) && isNull( otherFfc )) || ffc.equals( otherFfc ) )
                 {
-                    const numFilters = $ln( this.filtersConfigurations );
-                    const numOtherFilters = $ln( other?.filtersConfigurations );
+                    const numFilters = $ln( this.filterConfigurations );
+                    const numOtherFilters = $ln( other?.filterConfigurations );
 
                     if ( numFilters === numOtherFilters )
                     {
                         for( let i = 0, n = numFilters; i < n; i++ )
                         {
-                            const thisFilterConfig = this.filtersConfigurations[i];
-                            const otherFilterConfig = this.filtersConfigurations[i];
+                            const thisFilterConfig = this.filterConfigurations[i];
+                            const otherFilterConfig = this.filterConfigurations[i];
 
                             if ( !thisFilterConfig.equals( otherFilterConfig ) )
                             {
@@ -914,7 +938,7 @@
                     key_path: this.keyPath,
                     cert_path: this.certPath,
                     filter_factory: isNonNullObject( this.filterFactoryConfiguration ) ? (attempt( () => this.filterFactoryConfiguration.toLiteral() ) ?? null) : null,
-                    filters: ($ln( this.filtersConfigurations ) > 0) ? [...(asArray( this.filtersConfigurations ).map( e => e.toLiteral() ))] : [],
+                    filters: ($ln( this.filterConfigurations ) > 0) ? [...(asArray( this.filterConfigurations ).map( e => e.toLiteral() ))] : [],
                     route_prefix: this.routeFactoryConfiguration?.pathPrefix || _mt,
                     handler_factory: isNonNullObject( this.handlerFactoryConfiguration ) ? (attempt( () => this.handlerFactoryConfiguration.toLiteral() ) ?? null) : null,
                     routes: [...(asArray( this.routeConfigurations ).map( e => e.toLiteral() ))]
@@ -961,7 +985,7 @@
 
             const filterFactoryConfig = FilterFactoryConfiguration.from( data.filterFactoryConfiguration ?? data["filter_factory"] ?? readProperty( data, "filter_factory", "factory" ) );
 
-            let filters = asArray( data.filtersConfigurations ?? data["filters"] ?? readProperty( data, "filters", "filter_configs" ) );
+            let filters = asArray( data.filterConfigurations ?? data["filters"] ?? readProperty( data, "filters", "filter_configs" ) );
             filters = filters.filter( e => !isNull( e ) && (isString( e ) || isObject( e )) ).map( FilterConfiguration.from ).filter( isNonNullObject );
 
             const handlerFactoryConfig = HandlerFactoryConfiguration.from( data.handlerFactoryConfiguration ?? data["handler_factory"] ?? readProperty( data, "handler_factory", "factory" ) );

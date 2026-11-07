@@ -1,12 +1,6 @@
 (function exposeModule()
 {
-    const toolbocks = require( "@toolbocks/core" );
-
     const { RequestHandlerFactory } = require( "./HandlerFactory.js" );
-
-    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = toolbocks;
-
-    const { _ud, _mt } = constants;
 
     class RequestFilterFactory extends RequestHandlerFactory
     {
@@ -14,17 +8,27 @@
         {
             super( pDependencies, pOptions, ...pArgs );
         }
-    }
 
-    class ResponseFilterFactory extends RequestFilterFactory
-    {
-        constructor( pDependencies, pOptions, ...pArgs )
+        createFilter( pMiddlewareFunction, pForceAsync = false, pAbortable = false )
         {
-            super( pDependencies, pOptions, ...pArgs );
+            return super.createHandler( pMiddlewareFunction, pForceAsync, pAbortable );
         }
-
     }
 
+    const mod =
+        {
+            classes:
+                {
+                    RequestFilterFactory
+                },
+            RequestFilterFactory
+        };
 
+    if ( "undefined" !== typeof module )
+    {
+        module.exports = Object.freeze( mod );
+    }
+
+    return Object.freeze( mod );
 
 }());

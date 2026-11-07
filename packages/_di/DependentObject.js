@@ -775,6 +775,11 @@
             return ToolBocksModule.resolveLogger( this.#logger, ToolBocksModule.getGlobalLogger(), DEFAULT_LOGGER, simpleLogger );
         }
 
+        set logger( pLogger )
+        {
+            this.#logger = ToolBocksModule.resolveLogger( pLogger, this.#logger, ToolBocksModule.getGlobalLogger(), DEFAULT_LOGGER, simpleLogger );
+        }
+
         /**
          * Returns the Dependencies instance to subclasses.
          * Not enforceable (easily) in JavaScript,
