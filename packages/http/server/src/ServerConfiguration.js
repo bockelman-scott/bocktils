@@ -1,3 +1,5 @@
+// noinspection JSUnusedGlobalSymbols
+
 /**
  * This module exposes classes to digest and expose configuration values,
  * including routes, filters, and handlers,
@@ -18,7 +20,7 @@
 
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = toolbocks;
 
-    const { ToolBocksModule, attempt, readProperty, lock, $ln } = moduleUtils;
+    const { attempt, readProperty, lock, $ln } = moduleUtils;
 
     const { _ud, _mt } = constants;
 
@@ -32,7 +34,7 @@
 
     const { resolvePath } = fileUtils;
 
-    const { asObject, asJson, parseJson } = jsonUtils;
+    const { asObject, asJson } = jsonUtils;
 
     const { RequestFilterFactory } = require( "./FilterFactory.js" );
 
@@ -1036,6 +1038,7 @@
     {
         let data = isNonNullObject( pData ) || isJsonObject( pData ) ? asObject( pData ) : {};
 
+        // noinspection JSUnresolvedReference
         const servers = asArray( data?.servers ?? readProperty( data, "servers", "hosts", "apps" ) ?? [] );
 
         const key = !isNull( pId ) ? isNumeric( pId ) ? asInt( pId ) : asString( pId ) : _mt;

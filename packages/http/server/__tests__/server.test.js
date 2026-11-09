@@ -1,3 +1,5 @@
+// noinspection JSUnresolvedReference
+
 const fs = require( "fs" );
 
 const path = require( "path" );
@@ -46,9 +48,13 @@ describe( "ServerFactory Lifecycle", () =>
 
         // 1. Start the server
         await server.start();
+
+
         expect( server.started ).toBeTruthy();
+
         // 2. Make an actual network request to the dynamically mounted route
-        const response = await fetch( `${BASE_URL}/hello` );
+        let response = await fetch( `${BASE_URL}/hello` );
+
         const data = await response.json();
 
         // 3. Assert network resolution and handler execution

@@ -1,21 +1,8 @@
-const jsonUtils = require( "@toolbocks/json" );
+// noinspection JSUnresolvedReference
 
 const configModule = require( "../src/ServerConfiguration.js" );
 
-const
-    {
-        HandlerConfiguration,
-        HandlerFactoryConfiguration,
-        FilterConfiguration,
-        FilterFactoryConfiguration,
-        SslConfiguration,
-        RouteConfiguration,
-        RouteFactoryConfiguration,
-        ServerConfiguration,
-        parseServerConfiguration
-    } = configModule;
-
-const { asJson } = jsonUtils;
+const { ServerConfiguration, parseServerConfiguration } = configModule;
 
 const sample = require( "../src/servers.json" );
 const json = JSON.stringify( sample );

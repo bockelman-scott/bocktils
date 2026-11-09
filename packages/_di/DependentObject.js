@@ -714,7 +714,7 @@
             this.#dependencies = [...(this.#dependenciesContainer?.inventory ?? dependencyArgs), ...dependencyArgs].filter( Dependency.isDependency );
 
             // use the DependencyConstant to retrieve the injected component
-            this.#logger = this._findDependency( DEP_CONSTS.LOGGER ) ??
+            this.#logger = attemptSilent( () => this._findDependency( DEP_CONSTS.LOGGER ) ) ??
                            [...(dependencyArgs)].find( ToolBocksModule.isLogger ) ??
                            this.#options?.logger ?? DEFAULT_LOGGER;
 

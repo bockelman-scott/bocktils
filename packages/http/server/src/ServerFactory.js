@@ -52,18 +52,11 @@
 
     const logUtils = require( "@toolbocks/logging" );
 
-    const
-        {
-            ServerConfiguration,
-            FilterConfiguration,
-            HandlerConfiguration,
-            RouteConfiguration
-        } = require( "./ServerConfiguration.js" );
+    const { ServerConfiguration, FilterConfiguration } = require( "./ServerConfiguration.js" );
 
     const { RequestFilterFactory } = require( "./FilterFactory.js" );
 
     const { RequestHandlerFactory } = require( "./HandlerFactory.js" );
-
 
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = toolbocks;
 
@@ -77,7 +70,6 @@
             attemptSilent,
             lock,
             no_op,
-            functionToString,
             resolveError,
             readProperty,
             konsole = console
@@ -85,9 +77,9 @@
 
     const { _ud, _mt } = constants;
 
-    const { isNull, isObject, isNonNullObject, isArray, isFunction, isError, isClass, getClassName } = typeUtils;
+    const { isNull, isObject, isNonNullObject, isArray, isFunction, isClass } = typeUtils;
 
-    const { asString, asInt, isBlank, toBool, isFilePath } = stringUtils;
+    const { asString, isBlank, toBool, isFilePath } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -97,6 +89,7 @@
 
     const { SimpleLogger, SourcedSimpleLogger } = logUtils;
 
+    // noinspection JSUnusedLocalSymbols
     const { getPerformanceTimer } = performanceModule;
 
     const SIMPLE_LOGGER = new SimpleLogger( ToolBocksModule.getGlobalLogger(), console );
@@ -119,6 +112,7 @@
             return this.#__registry;
         }
 
+        // noinspection JSUnusedGlobalSymbols
         async getRegistry()
         {
             return isNonNullObject( this.#__registry ) ? await this.registry.init() : null;
@@ -134,11 +128,13 @@
             let user = this.userInfo || os.userInfo( { "encoding": "utf-8" } );
             if ( isNonNullObject( user ) )
             {
+                // noinspection JSValidateTypes
                 return (isFunction( user.homedir ) ? user.homedir() : user.homedir) || os.homedir();
             }
             return os.homedir();
         }
 
+        // noinspection JSUnusedGlobalSymbols
         get tmpDir()
         {
             return os.tmpdir();
@@ -149,11 +145,13 @@
             return os.tmpdir();
         }
 
+        // noinspection JSUnusedGlobalSymbols
         get currentPath()
         {
             return process.cwd();
         }
 
+        // noinspection JSUnusedGlobalSymbols
         get sourcePath()
         {
             return __dirname + "/" + __filename;
@@ -444,18 +442,31 @@
             return router;
         }
 
+        #resolvePathPrefix( pPrefix )
+        {
+            let prefix = asString( pPrefix, true );
+            if ( !prefix.startsWith( "/" ) )
+            {
+                prefix = ("/" + prefix);
+            }
+            return prefix;
+        }
+
+        // noinspection JSUnusedGlobalSymbols
         async createServer( pServerConfiguration, pDependencyRegistry = this.dependencyRegistry )
         {
             const registry = await (pDependencyRegistry?.init() ?? await this.getDependencyRegistry());
 
             const configuration = ServerConfiguration.from( pServerConfiguration );
 
-            const id = configuration.id || readProperty( configuration, "id", "server_id" );
-            const name = configuration.name || readProperty( configuration, "name", "server_name" );
-            const port = asInt( configuration.port || readProperty( configuration, "port", "server_port" ) );
+            /*
+             const id = configuration.id || readProperty( configuration, "id", "server_id" );
+             const name = configuration.name || readProperty( configuration, "name", "server_name" );
+             const port = asInt( configuration.port || readProperty( configuration, "port", "server_port" ) );
 
-            const moduleBasePath = configuration.resolveModulePath( configuration.basePath || readProperty( configuration, "modules_base_path", "modules_path", "base_path" ) );
+             const moduleBasePath = configuration.resolveModulePath( configuration.basePath || readProperty( configuration, "modules_base_path", "modules_path", "base_path" ) );
 
+             */
             const allowCors = toBool( configuration.allowCors ?? readProperty( configuration, "allow_cross_origin_requests", "allow_cors", "cors" ) );
 
             const useCompression = toBool( configuration.useCompression ?? readProperty( configuration, "use_compression", "compression" ) );
@@ -463,22 +474,11 @@
 
             const parseCookies = toBool( configuration.parseCookies ?? readProperty( configuration, "parse_cookies", "cookies" ) );
 
-            let useSsl = toBool( configuration.useSsl ?? readProperty( configuration, "use_ssl", "ssl" ) );
-
-            const sslConfig = configuration.sslConfiguration ?? readProperty( configuration, "ssl_configuration", "ssl_config", "ssl" );
-
-            useSsl = useSsl && isNonNullObject( sslConfig );
-
-            const keyPath = useSsl ? sslConfig.keyPath || readProperty( sslConfig ?? configuration, "key_path", "ssl_key_path" ) : _mt;
-            const certPath = useSsl ? sslConfig.certPath || readProperty( sslConfig ?? configuration, "cert_path", "ssl_cert_path", "certificate_path" ) : _mt;
-
-            useSsl = useSsl && !(isBlank( keyPath ) || isBlank( certPath ));
-
             const filterFactory = await this.#resolveFilterFactory( configuration, registry );
             const filters = await this.#resolveFilters( configuration, filterFactory );
 
             const routeFactoryConfig = configuration.routeFactoryConfiguration ?? readProperty( configuration, "route_config_factory", "route_factory" );
-            const pathPrefix = (routeFactoryConfig ?? configuration).pathPrefix || configuration["route_prefix"] || readProperty( routeFactoryConfig ?? configuration, "path_prefix", "route_prefix", "path", "prefix" );
+            const pathPrefix = this.#resolvePathPrefix( (routeFactoryConfig ?? configuration).pathPrefix || configuration["route_prefix"] || readProperty( routeFactoryConfig ?? configuration, "path_prefix", "route_prefix", "path", "prefix" ) );
 
             const handlerFactory = await this.#resolveHandlerFactory( configuration, registry ) ?? await this.#resolveHandlerFactory( routeFactoryConfig, registry );
 
@@ -522,10 +522,13 @@
                 app.use( ...filters );
             }
 
-            app.use( pathPrefix, ( req, res, next ) =>
+            const handler = ( req, res, next ) =>
             {
                 router( req, res, next );
-            } );
+            };
+
+            // HERE IS WHERE WIRE UP OUR UNIVERSAL HANDLER
+            app.use( this.#resolvePathPrefix( pathPrefix ), handler );
 
             const serverContext =
                 {
@@ -547,6 +550,7 @@
     }
 
 
+    // noinspection DuplicatedCode
     class Server extends DependentObject
     {
         #id;
@@ -631,11 +635,13 @@
             return this.#port;
         }
 
+        // noinspection JSUnusedGlobalSymbols
         get httpServer()
         {
             return this.#httpServer;
         }
 
+        // noinspection JSUnusedGlobalSymbols
         get appServer()
         {
             return this.#appServer;
@@ -651,6 +657,7 @@
             return this.#started;
         }
 
+        // noinspection JSUnusedGlobalSymbols
         get eventHandlersRegistered()
         {
             return this.#eventHandlersRegistered;
@@ -685,7 +692,9 @@
 
                 this.#starting = true;
 
-                // noinspection TypeScriptUMDGlobal
+                const logger = ToolBocksModule.resolveLogger( this.logger, ToolBocksModule.getGlobalLogger(), DEFAULT_LOGGER );
+
+                // noinspection TypeScriptUMDGlobal,JSValidateTypes
                 return new Promise( ( resolve, reject ) =>
                                     {
                                         this.#httpServer.listen( port, () =>
@@ -695,10 +704,7 @@
                                             this.#starting = false;
                                             this.#stopping = false;
 
-                                            const logger = ToolBocksModule.resolveLogger( this.logger, ToolBocksModule.getGlobalLogger(), DEFAULT_LOGGER );
                                             attemptSilent( () => (logger ?? console).info( `[${this.#configuration?.name || "Server"}] Listening on port ${port} (SSL: ${this.#ssl})` ) );
-
-                                            this.#registerEventHandlers().then( no_op ).catch( (logger ?? console).error ?? console.error );
 
                                             resolve( this );
                                         } ).on( "error", ( err ) =>
@@ -717,7 +723,7 @@
             {
                 this.#stopping = true;
 
-                // noinspection TypeScriptUMDGlobal
+                // noinspection TypeScriptUMDGlobal,JSValidateTypes
                 return new Promise( ( resolve, reject ) =>
                                     {
                                         // close() stops accepting new connections but keeps existing ones open until they finish
@@ -783,12 +789,13 @@
                 }
             };
 
-            const handleUnhandledRejection = ( pReason, pPromise ) =>
+            const handleUnhandledRejection = ( pReason ) =>
             {
                 const ex = resolveError( pReason || (new Error( "An unhandled Promise rejection occurred " + (!isBlank( asString( pReason, true ) ) ? asString( pReason ) : _mt) )), (pReason?.message || pReason) );
                 attemptSilent( () => logger.error( ex ) );
             };
 
+            // noinspection DuplicatedCode
             const handleWarning = ( pEvent ) =>
             {
                 const warning = resolveError( pEvent || resolveError( new Error( pEvent?.name + ":" + pEvent?.message ), pEvent?.name ), (pEvent?.message || pEvent) );
@@ -850,6 +857,7 @@
 
     }
 
+    // noinspection JSUnusedLocalSymbols
     const startPerformanceMonitor = function( pEntryTypes, pCallback )
     {
         const performanceObserver = new PerformanceObserver( pCallback );
@@ -857,6 +865,7 @@
         return performanceObserver;
     };
 
+    // noinspection JSUnusedLocalSymbols
     const stopPerformanceMonitor = function( pInstance )
     {
         if ( isNonNullObject( pInstance ) && pInstance instanceof PerformanceObserver )
@@ -864,42 +873,6 @@
             attempt( () => pInstance.disconnect() );
         }
     };
-
-    function addServerEventListeners( pHandlers )
-    {
-        const handlers = isNonNullObject( pHandlers ) ? pHandlers : {};
-
-        /**
-         * Prevent crashing the server if some unexpected exception has not been handled
-         */
-        process.on( "uncaughtException", handlers["uncaughtException"] || handleUncaughtException );
-
-        /**
-         * Executes in the case of an unhandled Promise rejection
-         */
-        process.on( "unhandledRejection", handlers["unhandledRejection"] || handleUnhandledRejection );
-
-        /**
-         * Opportunity to alert someone to the event that occurs right before Node exits
-         */
-        process.on( "beforeExit", handlers["beforeExit"] || handleBeforeExit );
-
-        /**
-         * The application has ended
-         */
-        process.on( "exit", handlers["exit"] || handleExit );
-
-        /**
-         * Executes on receipt of a warning
-         */
-        process.on( "warning", handlers["warning"] || handleWarning );
-
-        /**
-         * Executes if Node.js receives a SIGTERM or SIGINT signal
-         */
-        process.on( "disconnect", handlers["disconnect"] || handleDisconnect );
-    }
-
 
     Server.DEPENDENCIES =
         {

@@ -12,8 +12,6 @@
 
     const { _ud = "undefined" } = constants;
 
-    const { asJson, parseJson } = jsonUtils;
-
     const
         {
             HandlerConfiguration,
@@ -66,7 +64,8 @@
             RequestFilterFactory,
             RequestHandlerFactory,
             ServerFactory,
-            Server
+            Server,
+            parseServerConfiguration
         };
 
     if ( _ud !== typeof module )

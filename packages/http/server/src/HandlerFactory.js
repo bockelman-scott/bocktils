@@ -25,7 +25,7 @@
 
     const { _ud, _mt } = constants;
 
-    const { isNull, isNonNullObject, isFunction, isAsyncFunction, isError, getClassName } = typeUtils;
+    const { isNull, isFunction, isAsyncFunction, isError, getClassName } = typeUtils;
 
     const { asString, toBool, _lct } = stringUtils;
 
@@ -39,6 +39,7 @@
 
     const DEFAULT_LOGGER = SourcedSimpleLogger.adapt( SIMPLE_LOGGER, "HttpRequestHandlerFactory" );
 
+    // noinspection JSUnresolvedReference
     /**
      * Base class to extend to create factories that return RequestHandler functions
      * with access to injected dependencies.
@@ -48,7 +49,6 @@
      * and returns a new copy of that function BOUND to the instance of RequestHandlerFactory,
      * thus having access to all injected dependencies via the 'this' scope
      *
-     * @abstract
      * @class
      */
     class RequestHandlerFactory extends DependentObject
@@ -127,6 +127,7 @@
             return _lct( this.#mode );
         }
 
+        // noinspection JSUnusedGlobalSymbols
         /**
          * Returns true if the current execution environment is a production environment
          * @returns {boolean}
@@ -162,6 +163,7 @@
             return asString( key, true ).replace( /^(bounded)+/, _mt );
         }
 
+        // noinspection JSUnusedGlobalSymbols
         /**
          * Returns the handle function bound to this factory by name.
          *
@@ -339,6 +341,7 @@
             throw new IllegalArgumentError( `${getClassName( this )}::createHandler requires a function with request and response parameters`, { detail: { arg: pMiddlewareFunction } } );
         }
 
+        // noinspection JSUnusedGlobalSymbols
         createErrorHandler( pErrorHandlingFunction )
         {
             // noinspection JSUnresolvedReference
