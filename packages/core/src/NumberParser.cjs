@@ -17,13 +17,25 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const { ToolBocksModule, lock } = moduleUtils;
+    const { ToolBocksModule, attempt, lock } = moduleUtils;
 
-    const { _mt_str, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR } = constants;
+    const { _mt, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR } = constants;
 
-    const { isString, isNumber, isObject, isNull, isHex, isOctal, isBinary, isDecimal } = typeUtils;
+    const
+        {
+            isNull,
+            isObject,
+            isNonNullObject,
+            isNumber,
+            isString,
+            isHex,
+            isOctal,
+            isBinary,
+            isDecimal,
+            isNanOrInfinite
+        } = typeUtils;
 
-    const { asString, lcase, isBlank } = stringUtils;
+    const { asString, asFloat, lcase, isBlank } = stringUtils;
 
     const { resolveLocale } = localeUtils;
 
@@ -161,7 +173,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             s = s.slice( 0, indexOfDecimalPoint );
 
-            s = s.replace( /\d/g, _mt_str );
+            s = s.replace( /\d/g, _mt );
 
             let minusSign = s.slice( 0, 1 );
 
@@ -169,8 +181,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             if ( minusSign === grpSeparator )
             {
-                minusSign = _minus === minusSign ? minusSign : _mt_str;
-                grpSeparator = _minus === grpSeparator ? _mt_str : grpSeparator;
+                minusSign = _minus === minusSign ? minusSign : _mt;
+                grpSeparator = _minus === grpSeparator ? _mt : grpSeparator;
             }
 
             this._separators =
@@ -235,15 +247,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             // remove leading zeroes, unless the value appears to be a hexadecimal or octal value
             if ( isDecimal( s ) )
             {
-                s = s.replace( /^0+/, _mt_str );
+                s = s.replace( /^0+/, _mt );
             }
 
             const rxDecimalPoint = getReForDec( this.decimalSeparator );
 
             // remove any character that is not a digit, the decimal separator or a minus sign (or if hex, x, or octal, o)
-            const re = new RegExp( "[^E\\d" + (isHex( s ) ? "x" : _mt_str) + (isOctal( s ) ? "o" : _mt_str) + (isBinary( s ) ? "b" : _mt_str) + rxDecimalPoint + this.negativeSign + "]", "gi" );
+            const re = new RegExp( "[^E\\d" + (isHex( s ) ? "x" : _mt) + (isOctal( s ) ? "o" : _mt) + (isBinary( s ) ? "b" : _mt) + rxDecimalPoint + this.negativeSign + "]", "gi" );
 
-            s = s.replace( re, _mt_str );
+            s = s.replace( re, _mt );
 
             // switch to the internal numeric format expected by parseFloat
             const re2 = new RegExp( rxDecimalPoint, "g" );
@@ -268,6 +280,26 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             return num;
         }
+
+        percentToDecimal( pValue )
+        {
+            const num = this.parse( pValue );
+            if ( !isNanOrInfinite( num ) )
+            {
+                return asFloat( num / 100.00 );
+            }
+            return 0;
+        }
+
+        decimalToPercent( pValue )
+        {
+            const num = this.parse( pValue );
+            if ( !isNanOrInfinite( num ) )
+            {
+                return asFloat( num * 100.00 );
+            }
+            return 0;
+        }
     }
 
     NumberParser.fromNumberFormat = function( pNumberFormat )
@@ -288,6 +320,40 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         throw new Error( "NumberParser.fromLocale requires an instance of Intl.Locale or a string representing a Locale" );
     };
 
+    function pctToDec( pValue, pLocale = "en_US" )
+    {
+        if ( isNumber( pValue ) && !isNanOrInfinite( pValue ) )
+        {
+            return asFloat( pValue / 100.00 );
+        }
+
+        const numberParser = attempt( () => new NumberParser( pLocale ) );
+
+        if ( isNonNullObject( numberParser ) )
+        {
+            return numberParser.percentToDecimal( pValue );
+        }
+
+        return asFloat( (asFloat( pValue ) / 100.00) );
+    }
+
+    function decToPct( pValue, pLocale = "en_US" )
+    {
+        if ( isNumber( pValue ) && !isNanOrInfinite( pValue ) )
+        {
+            return asFloat( pValue * 100.00 );
+        }
+
+        const numberParser = attempt( () => new NumberParser( pLocale ) );
+
+        if ( isNonNullObject( numberParser ) )
+        {
+            return numberParser.decimalToPercent( pValue );
+        }
+
+        return asFloat( (asFloat( pValue ) * 100.00) );
+    }
+
     let mod =
         {
             dependencies,
@@ -295,7 +361,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 {
                     NumberParser
                 },
-            NumberParser
+            NumberParser,
+            pctToDec,
+            decToPct
         };
 
     mod = toolBocksModule.extend( mod );

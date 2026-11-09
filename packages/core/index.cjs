@@ -26,7 +26,7 @@ const { _ud = "undefined", $scope } = constants;
         CustomEvent = ModuleEvent;
     }
 
-    const { NumberParser } = numberParser;
+    const { NumberParser, pctToDec, decToPct } = numberParser;
 
     const toolBocksModule = new ToolBocksModule( "CoreUtils", INTERNAL_NAME );
 
@@ -41,6 +41,8 @@ const { _ud = "undefined", $scope } = constants;
             NumberParser,
             guidUtils,
             functionUtils,
+            pctToDec,
+            decToPct,
             dependencies:
                 {
                     moduleUtils,
