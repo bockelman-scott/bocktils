@@ -10,6 +10,8 @@
 {
     const toolbocks = require( "@toolbocks/core" );
 
+    const fileUtils = require( "@toolbocks/files" );
+
     const httpUtils = require( "@toolbocks/http" );
 
     const jsonUtils = require( "@toolbocks/json" );
@@ -22,17 +24,25 @@
 
     const { isNull, isObject, isNonNullObject, isString, isNumeric, isBoolean } = typeUtils;
 
-    const { asString, asInt, toBool, _lct, isBlank, isJsonObject } = stringUtils;
+    const { asString, asInt, toBool, _lct, isBlank, isFilePath, isJsonObject, cleanUrl } = stringUtils;
 
     const { asArray } = arrayUtils;
 
     const { HttpVerb } = httpUtils;
+
+    const { resolvePath } = fileUtils;
 
     const { asObject, asJson, parseJson } = jsonUtils;
 
     const { RequestFilterFactory } = require( "./FilterFactory.js" );
 
     const { RequestHandlerFactory } = require( "./HandlerFactory.js" );
+
+    const DEFAULTS =
+        {
+            PORT: 3000,
+            MAX_SERVER_ID: 9_999
+        };
 
     /**
      * Represents configuration values for a single Handler.
@@ -693,7 +703,7 @@
     {
         let id = ++NEXT_SERVER_ID;
 
-        if ( id > 9_999 )
+        if ( id > DEFAULTS.MAX_SERVER_ID )
         {
             NEXT_SERVER_ID = 0;
             id = ++NEXT_SERVER_ID;
@@ -707,10 +717,15 @@
         #id = 0;
         #name = "HTTP(s) Server";
 
-        #port = 3000;
+        #port = DEFAULTS.PORT;
 
         #useSsl = true;
         #sslConfiguration = {};
+
+        #basePath = _mt;
+        #allowCors = false;
+        #useCompression = false;
+        #compressionOptions = null;
 
         #filterFactoryConfiguration = {};
         #filterConfigurations = [];
@@ -724,23 +739,31 @@
 
         constructor( pId,
                      pName,
-                     pPort = 3000,
+                     pPort = DEFAULTS.PORT,
                      pUseSsl,
                      pSslConfiguration,
                      pFilterFactoryConfiguration,
                      pFilterConfigurations,
                      pHandlerFactoryConfiguration,
                      pRouteFactoryConfiguration,
-                     pParseCookies,
+                     pModulesBasePath,
+                     pAllowCors = true,
+                     pCompressionOptions,
+                     pParseCookies = false,
                      pCreateServerOptions = {} )
         {
-            this.#port = asInt( pPort ) || 3000;
+            this.#port = asInt( pPort ) || DEFAULTS.PORT;
 
             this.#id = asInt( pId || nextServerId() );
             this.#name = asString( pName, true ) || `Server_${this.#port}`;
 
             this.#useSsl = toBool( pUseSsl );
             this.#sslConfiguration = lock( SslConfiguration.from( pSslConfiguration ) );
+
+            this.#basePath = asString( pModulesBasePath || _mt, true );
+            this.#allowCors = toBool( pAllowCors );
+            this.#useCompression = isNonNullObject( pCompressionOptions );
+            this.#compressionOptions = this.#useCompression ? asObject( pCompressionOptions ) : null;
 
             this.#filterFactoryConfiguration = lock( FilterFactoryConfiguration.from( pFilterFactoryConfiguration ) );
             this.#filterConfigurations = lock( asArray( pFilterConfigurations ?? [] ).map( FilterConfiguration.from ) );
@@ -766,7 +789,42 @@
 
         get port()
         {
-            return asInt( this.#port || 3000 );
+            return asInt( this.#port || DEFAULTS.PORT );
+        }
+
+        get basePath()
+        {
+            return this.#basePath;
+        }
+
+        get modulesBasePath()
+        {
+            return this.basePath;
+        }
+
+        get allowCors()
+        {
+            return this.#allowCors;
+        }
+
+        get compressionOptions()
+        {
+            return this.#useCompression ? asObject( this.#compressionOptions ) : null;
+        }
+
+        get useCompression()
+        {
+            return this.#useCompression && isNonNullObject( this.#compressionOptions );
+        }
+
+        get parseCookies()
+        {
+            return toBool( this.#parseCookies );
+        }
+
+        get httpCreateServerOptions()
+        {
+            return this.#httpCreateServerOptions;
         }
 
         get useSsl()
@@ -793,8 +851,6 @@
         {
             if ( this.useSsl )
             {
-                // TODO: I think I need to read data from the file stored at keyPath and certPath to pass in the ceateServer options.
-
                 return { ...(asObject( this.#httpCreateServerOptions ?? {} )), cert: this.certPath, key: this.keyPath };
             }
             else
@@ -828,11 +884,30 @@
             return [...((asArray( this.routeFactoryConfiguration.routes ?? [] )).map( lock ))];
         }
 
+        resolveModulePath( pModulePath )
+        {
+            let modulePath = asString( pModulePath, true );
+
+            if ( modulePath.startsWith( "@" ) )
+            {
+                return modulePath;
+            }
+
+            let basePath = asString( this.basePath, true );
+
+            if ( isFilePath( basePath ) )
+            {
+                modulePath = resolvePath( basePath, modulePath );
+            }
+
+            return cleanUrl( modulePath );
+        }
+
         validate()
         {
             const results =
                 {
-                    port: asInt( this.port ) >= 3000,
+                    port: asInt( this.port ) >= DEFAULTS.PORT,
                     useSsl: isBoolean( this.useSsl ),
                     keyPath: !isBlank( this.keyPath ) || !this.useSsl,
                     certPath: !isBlank( this.certPath ) || !this.useSsl,
@@ -847,7 +922,7 @@
 
         isValid()
         {
-            if ( asInt( this.port ) < 3000 )
+            if ( asInt( this.port ) < DEFAULTS.PORT )
             {
                 return false;
             }
@@ -934,9 +1009,13 @@
                     id: this.id,
                     name: this.name,
                     port: this.port,
-                    use_ssl: this.useSsl,
-                    key_path: this.keyPath,
-                    cert_path: this.certPath,
+                    modules_base_path: asString( this.basePath, true ),
+                    allow_cross_origin_requests: toBool( this.allowCors ),
+                    use_compression: toBool( this.useCompression ),
+                    compression_options: this.compressionOptions,
+                    use_ssl: toBool( this.useSsl ),
+                    key_path: asString( this.keyPath, true ),
+                    cert_path: asString( this.certPath, true ),
                     filter_factory: isNonNullObject( this.filterFactoryConfiguration ) ? (attempt( () => this.filterFactoryConfiguration.toLiteral() ) ?? null) : null,
                     filters: ($ln( this.filterConfigurations ) > 0) ? [...(asArray( this.filterConfigurations ).map( e => e.toLiteral() ))] : [],
                     route_prefix: this.routeFactoryConfiguration?.pathPrefix || _mt,
@@ -973,10 +1052,18 @@
                 return data;
             }
 
-            const port = asInt( data.port || readProperty( data, "port", "server_port" ) || 3000 ) || 3000;
+            const port = asInt( data.port || readProperty( data, "port", "server_port" ) || DEFAULTS.PORT ) || DEFAULTS.PORT;
 
             const id = asInt( data.id || readProperty( data, "id", "server_id" ) || nextServerId() );
             const name = asString( data.name || readProperty( data, "name", "server_name" ) || `Server_${port}`, true );
+
+            const basePath = asString( data.basePath || data["modules_base_path"] || readProperty( data, "modules_base_path" ) );
+
+            const allowCors = toBool( data.allowCors ?? data["allow_cross_origin_requests"] ?? readProperty( data, "allow_cross_origin_requests", "allow_cors", "cors" ) );
+
+            const compressionOptions = data.compressionOptions ?? readProperty( data, "compression_options", "compression" );
+
+            const parseCookies = toBool( data.parseCookies ?? data["parse_cookies"] ?? readProperty( data, "parseCookies", "cookies" ) );
 
             const useSsl = toBool( data.useSsl || data["use_ssl"] || readProperty( data, "use_ssl", "is_use_ssl", "ssl" ) );
             const keyPath = data.keyPath || data["key_path"] || data.keyPath || readProperty( data, "key_path", "ssl_key_path", "key", "ssl_key" );
@@ -1001,12 +1088,21 @@
                                             filterFactoryConfig,
                                             filters,
                                             handlerFactoryConfig,
-                                            routeFactoryConfiguration );
+                                            routeFactoryConfiguration,
+                                            basePath,
+                                            allowCors,
+                                            compressionOptions,
+                                            parseCookies );
         }
 
         return null;
 
     };
+
+    ServerConfiguration.DEFAULTS =
+        {
+            ...(asObject( DEFAULTS ))
+        };
 
     function parseServerConfiguration( pJson )
     {

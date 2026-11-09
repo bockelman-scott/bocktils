@@ -15,11 +15,14 @@
         }
     }
 
+    RequestFilterFactory.DEPENDENCIES = { ...(RequestHandlerFactory.DEPENDENCIES) };
+
     const mod =
         {
             classes:
                 {
-                    RequestFilterFactory
+                    RequestFilterFactory,
+                    RequestHandlerFactory
                 },
             RequestFilterFactory
         };

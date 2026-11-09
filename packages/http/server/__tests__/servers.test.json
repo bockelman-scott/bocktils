@@ -1,0 +1,30 @@
+{
+  "servers": [
+    {
+      "id": 1,
+      "name": "TestServer",
+      "port": 3030,
+      "use_ssl": false,
+      "modules_base_path": "@toolbocks/http-server",
+      "route_prefix": "api/v1",
+      "handler_factory": {
+        "module_path": "@toolbocks/http-server",
+        "factory_class": "RequestHandlerFactory"
+      },
+      "routes": [
+        {
+          "path": "hello",
+          "method": "GET",
+          "filters": [],
+          "handlers": [
+            {
+              "name": "helloWorld",
+              "module_path": "../__tests__/mocks/helloHandler.js",
+              "function_name": "helloWorld"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

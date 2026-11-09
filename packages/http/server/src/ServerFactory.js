@@ -1,11 +1,6 @@
 (function exposeModule()
 {
     /**
-     * Imports the Middleware framework
-     */
-    const express = require( "express" );
-
-    /**
      * Imports the filesystem library
      */
     const fs = require( "fs" );
@@ -15,16 +10,6 @@
      */
     const http = require( "http" );
     const https = require( "https" );
-
-    /**
-     * Imports the middleware to read a request body
-     */
-    const bodyParser = require( "body-parser" );
-
-    /**
-     * Imports the middleware to read a multipart form request body
-     */
-    const multipartParser = require( "multer" );
 
     /**
      * Imports the middleware to read cookies from a request
@@ -40,6 +25,19 @@
      * Allows monitoring the health of the server
      */
     const perfUtils = require( "perf_hooks" );
+
+    /**
+     * Imports the Middleware framework
+     */
+    const express = require( "express" );
+
+    /**
+     * Imports the module to handle cross-origin requests
+     * Added to the filter chain if allowsCors is true
+     */
+    const cors = require( "cors" );
+
+    const compression = require( "compression" );
 
     /**
      * Import the ToolBocks Performance-related module
@@ -78,20 +76,22 @@
             attempt,
             attemptSilent,
             lock,
+            no_op,
             functionToString,
             resolveError,
-            readProperty
+            readProperty,
+            konsole = console
         } = moduleUtils;
 
     const { _ud, _mt } = constants;
 
     const { isNull, isObject, isNonNullObject, isArray, isFunction, isError, isClass, getClassName } = typeUtils;
 
-    const { asString, asInt, isBlank, toBool, _lct } = stringUtils;
+    const { asString, asInt, isBlank, toBool, isFilePath } = stringUtils;
 
     const { asArray } = arrayUtils;
 
-    const { DependentObject, Dependencies } = depInjection;
+    const { DependentObject, Dependencies, Dependency } = depInjection;
 
     const { asObject } = jsonUtils;
 
@@ -105,13 +105,70 @@
 
     const isExpress = e => !isNull( e ) && isFunction( e ) && isFunction( e?.use );
 
-    class ServerFactory
+    class __Shared
+    {
+        #__registry;
+
+        constructor( pDependencyRegistry )
+        {
+            this.#__registry = pDependencyRegistry;
+        }
+
+        get registry()
+        {
+            return this.#__registry;
+        }
+
+        async getRegistry()
+        {
+            return isNonNullObject( this.#__registry ) ? await this.registry.init() : null;
+        }
+
+        get userInfo()
+        {
+            return os.userInfo( { "encoding": "utf-8" } );
+        }
+
+        get homeDirectory()
+        {
+            let user = this.userInfo || os.userInfo( { "encoding": "utf-8" } );
+            if ( isNonNullObject( user ) )
+            {
+                return (isFunction( user.homedir ) ? user.homedir() : user.homedir) || os.homedir();
+            }
+            return os.homedir();
+        }
+
+        get tmpDir()
+        {
+            return os.tmpdir();
+        }
+
+        get tmpdir()
+        {
+            return os.tmpdir();
+        }
+
+        get currentPath()
+        {
+            return process.cwd();
+        }
+
+        get sourcePath()
+        {
+            return __dirname + "/" + __filename;
+        }
+    }
+
+    class ServerFactory extends __Shared
     {
         #dependencyRegistry;
 
         constructor( pDependencyRegistry )
         {
-            this.#dependencyRegistry = pDependencyRegistry;
+            super( pDependencyRegistry );
+
+            this.#dependencyRegistry = pDependencyRegistry ?? this.registry;
         }
 
         get dependencyRegistry()
@@ -124,9 +181,35 @@
             return await this.dependencyRegistry.init();
         }
 
-        #isValidFactoryArguments( modulePath, factoryClassName )
+        resolveModulePath( pModulePath, pConfiguration )
         {
-            return !(isBlank( modulePath ) || /^\.$/.test( modulePath ) || isBlank( factoryClassName ));
+            const configuration = ServerConfiguration.from( pConfiguration ?? {} );
+            if ( isFunction( configuration?.resolveModulePath ) )
+            {
+                return configuration.resolveModulePath( pModulePath );
+            }
+
+            let modulePath = asString( pModulePath, true );
+
+            if ( modulePath.startsWith( "@" ) )
+            {
+                return modulePath;
+            }
+
+            if ( isBlank( modulePath ) )
+            {
+                return this.homeDirectory;
+            }
+
+            return modulePath;
+        }
+
+        #isValidFactoryArguments( pModulePath, pFactoryClassName )
+        {
+            const modulePath = asString( pModulePath, true );
+            const factoryClassName = asString( pFactoryClassName, true );
+
+            return !isBlank( factoryClassName ) && (isBlank( modulePath ) || modulePath.startsWith( "@" ) || isFilePath( modulePath ));
         }
 
         async #loadModule( pModulePath )
@@ -136,14 +219,62 @@
 
         #loadClass( pModule, pClassName )
         {
-            return pModule[pClassName];
+            let klass = null;
+
+            if ( isNonNullObject( pModule ) || isFunction( pModule ) )
+            {
+                klass = pModule[pClassName] ?? this[pClassName];
+            }
+
+            if ( isClass( klass ) || isNonNullObject( klass ) )
+            {
+                return klass;
+            }
+
+            if ( isClass( pClassName ) || isNonNullObject( pClassName ) )
+            {
+                return pClassName;
+            }
+
+            const msg = `Could not load class, ${pClassName}, from module, ${pModule?.name || asString( pModule )}`;
+            throw new IllegalArgumentError( msg,
+                                            {
+                                                detail:
+                                                    {
+                                                        module: pModule,
+                                                        className: pClassName
+                                                    },
+                                                pModule,
+                                                pClassName
+                                            } );
         }
 
         async #instantiateFactory( pFactory, pDependencyRegistry = this.dependencyRegistry )
         {
-            const registry = await (pDependencyRegistry?.init() ?? await this.getDependencyRegistry());
-            const dependencies = await registry.resolveDependencies( pFactory.DEPENDENCIES );
-            return new pFactory( dependencies );
+            if ( isClass( pFactory ) )
+            {
+                const registry = await (pDependencyRegistry?.init() ?? await this.getDependencyRegistry());
+                const dependencies = await registry.resolveDependencies( pFactory.DEPENDENCIES );
+                return new pFactory( dependencies );
+            }
+
+            if ( isNonNullObject( pFactory ) )
+            {
+                if ( isFunction( pFactory.init ) )
+                {
+                    return pFactory.init( pDependencyRegistry );
+                }
+                return pFactory;
+            }
+
+            throw new IllegalStateError( `Could not instantiate factory, ${pFactory?.name || pFactory}`,
+                                         {
+                                             detail:
+                                                 {
+                                                     factory: pFactory,
+                                                     registry: pDependencyRegistry
+                                                 }
+                                         } );
         }
 
         async #resolveFilterFactory( pServerConfiguration, pDependencyRegistry = this.dependencyRegistry )
@@ -152,46 +283,14 @@
 
             const registry = await (pDependencyRegistry?.init() ?? await this.getDependencyRegistry());
 
-            const factoryConfig = pServerConfiguration.filterFactoryConfiguration || readProperty( pServerConfiguration, "filter_factory" );
+            const serverConfiguration = ServerConfiguration.from( pServerConfiguration );
+
+            const factoryConfig = serverConfiguration.filterFactoryConfiguration || readProperty( serverConfiguration, "filter_factory" );
 
             if ( isNonNullObject( factoryConfig ) )
             {
-                const modulePath = factoryConfig.modulePath;
-                const factoryClassName = factoryConfig.factoryClass;
-
-                if ( this.#isValidFactoryArguments( modulePath, factoryClassName ) )
-                {
-                    const mod = await this.#loadModule( modulePath );
-
-                    factory = this.#loadClass( mod, factoryClassName );
-
-                    if ( isClass( factory ) )
-                    {
-                        factory = await this.#instantiateFactory( factory, registry );
-                    }
-
-                    if ( isNull( factory ) || !isObject( factory ) || !(factory instanceof RequestFilterFactory) )
-                    {
-                        factory = new RequestFilterFactory( new Dependencies( new Dependency( registry ), "dependency.registry", "dependencyRegistry" ) );
-                    }
-                }
-            }
-
-            return factory ?? new RequestFilterFactory( new Dependencies( new Dependency( registry ), "dependency.registry", "dependencyRegistry" ) );
-        }
-
-        async #resolveHandlerFactory( pServerConfiguration, pDependencyRegistry = this.dependencyRegistry )
-        {
-            let factory;
-
-            const registry = await (pDependencyRegistry?.init() ?? await this.getDependencyRegistry());
-
-            const handlerFactoryConfig = pServerConfiguration.handlerFactoryConfiguration || readProperty( pServerConfiguration, "handler_factory" );
-
-            if ( isNonNullObject( handlerFactoryConfig ) )
-            {
-                const modulePath = handlerFactoryConfig.modulePath;
-                const factoryClassName = handlerFactoryConfig.factoryClass;
+                const modulePath = this.resolveModulePath( factoryConfig.modulePath, serverConfiguration );
+                const factoryClassName = factoryConfig.factoryClass || readProperty( factoryConfig, "factory_class", "factory" );
 
                 if ( this.#isValidFactoryArguments( modulePath, factoryClassName ) )
                 {
@@ -211,7 +310,57 @@
                 }
             }
 
-            return factory ?? new RequestHandlerFactory( new Dependencies( new Dependency( registry, "dependency.registry", "dependencyRegistry" ) ) );
+            factory = factory ?? new RequestFilterFactory( new Dependencies( new Dependency( registry, "dependency.registry", "dependencyRegistry" ) ) );
+
+            if ( factory )
+            {
+                factory = await factory.init();
+            }
+
+            return factory;
+        }
+
+        async #resolveHandlerFactory( pServerConfiguration, pDependencyRegistry = this.dependencyRegistry )
+        {
+            let factory;
+
+            const registry = await (pDependencyRegistry?.init() ?? await this.getDependencyRegistry());
+
+            const serverConfiguration = ServerConfiguration.from( pServerConfiguration );
+
+            const handlerFactoryConfig = serverConfiguration.handlerFactoryConfiguration || readProperty( serverConfiguration, "handler_factory" );
+
+            if ( isNonNullObject( handlerFactoryConfig ) )
+            {
+                const modulePath = this.resolveModulePath( handlerFactoryConfig.modulePath, serverConfiguration );
+                const factoryClassName = handlerFactoryConfig.factoryClass || readProperty( handlerFactoryConfig, "factory_class", "factory" );
+
+                if ( this.#isValidFactoryArguments( modulePath, factoryClassName ) )
+                {
+                    const mod = await this.#loadModule( modulePath );
+
+                    factory = this.#loadClass( mod, factoryClassName );
+
+                    if ( isClass( factory ) )
+                    {
+                        factory = await this.#instantiateFactory( factory, registry );
+                    }
+
+                    if ( isNull( factory ) || !isObject( factory ) || !(factory instanceof RequestHandlerFactory) )
+                    {
+                        factory = new RequestFilterFactory( new Dependencies( new Dependency( registry, "dependency.registry", "dependencyRegistry" ) ) );
+                    }
+                }
+            }
+
+            factory = factory ?? new RequestHandlerFactory( new Dependencies( new Dependency( registry, "dependency.registry", "dependencyRegistry" ) ) );
+
+            if ( factory )
+            {
+                factory = await factory.init();
+            }
+
+            return factory;
         }
 
         async #resolveFilters( configuration, filterFactory )
@@ -232,7 +381,7 @@
                         const functionName = cfg.functionName || readProperty( cfg, "function_name", "action", "controller" );
                         const abortable = cfg.abortable ?? readProperty( cfg, "abortable" );
 
-                        const mod = await this.#loadModule( modulePath );
+                        const mod = await this.#loadModule( this.resolveModulePath( modulePath, configuration ) );
                         const func = mod[functionName];
 
                         const filter = filterFactory.createFilter( func, true, abortable );
@@ -257,7 +406,7 @@
             // Build route-specific filter
             const buildFilter = async( cfg ) =>
             {
-                const mod = await this.#loadModule( cfg.modulePath );
+                const mod = await this.#loadModule( this.resolveModulePath( cfg.modulePath ) );
                 const func = mod[cfg.functionName];
                 return filterFactory.createFilter( func, true, cfg.abortable );
             };
@@ -268,7 +417,7 @@
             // Build route-specific handlers
             const buildHandler = async( cfg ) =>
             {
-                const mod = await this.#loadModule( cfg.modulePath );
+                const mod = await this.#loadModule( this.resolveModulePath( cfg.modulePath ) );
                 const func = mod[cfg.functionName];
                 return handlerFactory.createHandler( func, true, cfg.abortable );
             };
@@ -305,6 +454,15 @@
             const name = configuration.name || readProperty( configuration, "name", "server_name" );
             const port = asInt( configuration.port || readProperty( configuration, "port", "server_port" ) );
 
+            const moduleBasePath = configuration.resolveModulePath( configuration.basePath || readProperty( configuration, "modules_base_path", "modules_path", "base_path" ) );
+
+            const allowCors = toBool( configuration.allowCors ?? readProperty( configuration, "allow_cross_origin_requests", "allow_cors", "cors" ) );
+
+            const useCompression = toBool( configuration.useCompression ?? readProperty( configuration, "use_compression", "compression" ) );
+            const compressionOptions = useCompression ? asObject( configuration.compressionOptions ?? readProperty( configuration, "compression_options", "compression" ) ) : null;
+
+            const parseCookies = toBool( configuration.parseCookies ?? readProperty( configuration, "parse_cookies", "cookies" ) );
+
             let useSsl = toBool( configuration.useSsl ?? readProperty( configuration, "use_ssl", "ssl" ) );
 
             const sslConfig = configuration.sslConfiguration ?? readProperty( configuration, "ssl_configuration", "ssl_config", "ssl" );
@@ -322,13 +480,38 @@
             const routeFactoryConfig = configuration.routeFactoryConfiguration ?? readProperty( configuration, "route_config_factory", "route_factory" );
             const pathPrefix = (routeFactoryConfig ?? configuration).pathPrefix || configuration["route_prefix"] || readProperty( routeFactoryConfig ?? configuration, "path_prefix", "route_prefix", "path", "prefix" );
 
-            const handlerFactory = await this.#resolveHandlerFactory( configuration, registry ) ?? this.#resolveHandlerFactory( routeFactoryConfig, registry );
+            const handlerFactory = await this.#resolveHandlerFactory( configuration, registry ) ?? await this.#resolveHandlerFactory( routeFactoryConfig, registry );
 
             const routeConfigs = configuration.routeConfigurations ?? readProperty( configuration, "routes" );
 
             let router = await this.#createRouter( routeConfigs, handlerFactory, filterFactory, routeFactoryConfig, pathPrefix );
 
             const app = express();
+
+            app.disable( "x-powered-by" );
+            app.set( "case sensitive routing", true );
+
+            if ( allowCors )
+            {
+                app.use( cors() );
+            }
+
+            if ( useCompression )
+            {
+                if ( isNonNullObject( compressionOptions ) )
+                {
+                    app.use( compression( compressionOptions ) );
+                }
+                else
+                {
+                    app.use( compression() );
+                }
+            }
+
+            if ( parseCookies )
+            {
+                app.use( cookieParser() );
+            }
 
             // Ensure standard parsers are mounted before custom filters
             app.use( express.json() );
@@ -344,8 +527,6 @@
                 router( req, res, next );
             } );
 
-            // TODO: helmet, cors, compression
-
             const serverContext =
                 {
                     options: { ...(asObject( configuration.options ?? {} )) },
@@ -358,13 +539,7 @@
                     updateRouter: ( pRouter ) => { router = pRouter ?? router; }
                 };
 
-            let dependencies = await registry.resolveDependencies( Server.DEPENDENCIES );
-
-            dependencies = dependencies.merge( dependencies,
-                                               new Dependency( registry, "dependency.registry", "dependencyRegistry" ),
-                                               new Dependency( serverContext, "http.server.context", "serverContext" ),
-                                               new Dependency( app, "http.app.server", "appServer" ),
-                                               new Dependency( this, "http.server.factory", "serverFactory" ) );
+            const dependencies = await registry.resolveDependencies( Server.DEPENDENCIES );
 
             return new Server( dependencies, serverContext, app );
         }
@@ -374,6 +549,10 @@
 
     class Server extends DependentObject
     {
+        #id;
+        #name;
+        #port;
+
         #httpServer;
         #appServer;
 
@@ -388,19 +567,35 @@
 
         #started;
 
+        #eventHandlersRegistered = false;
+        #starting = false;
+        #stopping = false;
+
         constructor( pDependencies, pOptions, ...pArgs )
         {
-            super( pDependencies, pOptions, ...pArgs );
+            super( pDependencies );
 
             const dependencies = Dependencies.resolveDependenciesInstance( pDependencies );
 
             this.#context = asObject( pOptions ?? dependencies.findDependency( "http.server.context" ) );
             this.#configuration = asObject( this.#context?.configuration ?? dependencies.findDependency( "http.server.configuration" ) );
-            this.#pathPrefix = (this.#context ?? this.#configuration)?.pathPrefix || (this.#context ?? this.#configuration)?.routePrefix || readProperty( (this.#context ?? this.#configuration), "route_prefix", "path_prefix" ) || readProperty( (this.#configuration ?? this.#context), "route_prefix", "path_prefix" );
 
-            this.#ssl = toBool( this.#configuration?.useSsl ?? readProperty( this.#configuration, "use_ssl" ) );
-            this.#sslKeyPath = this.#configuration?.keyPath || readProperty( this.#configuration, "key_path", "ssl_key_path", "ssl_key", "key" );
-            this.#sslCertPath = this.#configuration?.certPath || readProperty( this.#configuration, "cert_path", "ssl_cert_path", "certificate_path", "ssl_certificate_path", "certificate" );
+            const ctx = this.#context ?? this.#configuration ?? this.options;
+            const cfg = this.#configuration ?? ctx;
+
+            this.#id = ctx?.id || 1;
+            this.#name = ctx?.name || `Server ${this.#id}`;
+            this.#port = ctx?.port || ServerConfiguration.DEFAULTS.PORT;
+
+            // noinspection JSUnresolvedReference
+            this.#pathPrefix = ctx?.pathPrefix ||
+                               ctx?.routePrefix ||
+                               readProperty( ctx, "route_prefix", "path_prefix" ) ||
+                               readProperty( cfg, "route_prefix", "path_prefix" );
+
+            this.#ssl = toBool( cfg?.useSsl ?? readProperty( cfg, "use_ssl" ) );
+            this.#sslKeyPath = cfg?.keyPath || readProperty( cfg, "key_path", "ssl_key_path", "ssl_key", "key" );
+            this.#sslCertPath = cfg?.certPath || readProperty( cfg, "cert_path", "ssl_cert_path", "certificate_path", "ssl_certificate_path", "certificate" );
 
             this.#ssl = this.#ssl && !isBlank( this.#sslKeyPath ) && !isBlank( this.#sslCertPath );
 
@@ -409,15 +604,31 @@
             this.#appServer = isExpress( this.#appServer ) ? this.#appServer : dependencies.findDependency( "http.app.server" );
             this.#appServer = isExpress( this.#appServer ) ? this.#appServer : express();
 
-            const serverOptions = this.#configuration?.options ??
+            // Read the certificate buffers synchronously before binding the server
+            const serverOptions = cfg?.options ??
                                   this.#context?.options ??
                                   (this.#ssl ?
                                       {
-                                          cert: this.#sslCertPath,
-                                          key: this.#sslKeyPath
+                                          cert: fs.readFileSync( this.#sslCertPath ),
+                                          key: fs.readFileSync( this.#sslKeyPath )
                                       } : {});
 
             this.#httpServer = this.#ssl ? https.createServer( serverOptions, this.#appServer ) : http.createServer( serverOptions, this.#appServer );
+        }
+
+        get id()
+        {
+            return this.#id;
+        }
+
+        get name()
+        {
+            return this.#name;
+        }
+
+        get port()
+        {
+            return this.#port;
         }
 
         get httpServer()
@@ -440,9 +651,25 @@
             return this.#started;
         }
 
+        get eventHandlersRegistered()
+        {
+            return this.#eventHandlersRegistered;
+        }
+
         async init( ...pArgs )
         {
+            super.init( ...pArgs );
 
+            await this.#registerEventHandlers();
+
+            return this;
+        }
+
+        async dispose()
+        {
+            await this.stop();
+
+            await this.#unregisterEventHandlers();
         }
 
         async start()
@@ -452,33 +679,252 @@
                 await this.init();
             }
 
-            if ( !this.started )
+            if ( !(this.started || this.#starting) )
             {
-///
-                this.#started = true;
-            }
+                const port = this.#configuration?.port || ServerConfiguration.DEFAULTS.PORT || 3000;
 
+                this.#starting = true;
+
+                // noinspection TypeScriptUMDGlobal
+                return new Promise( ( resolve, reject ) =>
+                                    {
+                                        this.#httpServer.listen( port, () =>
+                                        {
+                                            this.#started = true;
+
+                                            this.#starting = false;
+                                            this.#stopping = false;
+
+                                            const logger = ToolBocksModule.resolveLogger( this.logger, ToolBocksModule.getGlobalLogger(), DEFAULT_LOGGER );
+                                            attemptSilent( () => (logger ?? console).info( `[${this.#configuration?.name || "Server"}] Listening on port ${port} (SSL: ${this.#ssl})` ) );
+
+                                            this.#registerEventHandlers().then( no_op ).catch( (logger ?? console).error ?? console.error );
+
+                                            resolve( this );
+                                        } ).on( "error", ( err ) =>
+                                        {
+                                            reject( err );
+                                        } );
+                                    } );
+            }
 
             return this;
         }
 
         async stop()
         {
-            if ( this.initialized && this.started )
+            if ( this.started && !this.#stopping )
             {
-                await this.dispose();
-                this.started = false;
+                this.#stopping = true;
+
+                // noinspection TypeScriptUMDGlobal
+                return new Promise( ( resolve, reject ) =>
+                                    {
+                                        // close() stops accepting new connections but keeps existing ones open until they finish
+                                        this.#httpServer.close( async( err ) =>
+                                                                {
+                                                                    if ( err )
+                                                                    {
+                                                                        return reject( err );
+                                                                    }
+
+                                                                    this.#started = false;
+                                                                    await this.dispose();
+
+                                                                    const logger = ToolBocksModule.resolveLogger( this.logger, ToolBocksModule.getGlobalLogger(), DEFAULT_LOGGER );
+                                                                    attemptSilent( () => (logger ?? console).info( `[${this.#configuration?.name || "Server"}] Shutdown complete.` ) );
+
+                                                                    this.#stopping = false;
+
+                                                                    resolve( this );
+                                                                } );
+                                    } );
             }
 
             return this;
         }
 
+        async #registerEventHandlers( pUnregister = false )
+        {
+            const server = this;
+
+            const logger = ToolBocksModule.resolveLogger( this.logger ?? DEFAULT_LOGGER, ToolBocksModule.getGlobalLogger(), console );
+
+            const EXIT_CODES =
+                lock( {
+                          NORMAL_SHUTDOWN: 0,
+                          UNCAUGHT_EXCEPTION: 1,
+                          UNHANDLED_REJECTION: 2,
+                          SIGINT: 130,
+                          SIGTERM: 143
+                      } );
+
+            const handleUncaughtException = ( pException, pOrigin ) =>
+            {
+                const ex = resolveError( pException || (new Error( "An uncaught exception occurred " + (!isBlank( asString( (pOrigin || pException.origin), true ) ) ? asString( (pOrigin || pException?.origin), true ) : _mt) )), pException?.message );
+                attemptSilent( () => logger.error( ex ) );
+                return (server ?? this).stop().then( no_op ).catch( err => (this.logger ?? DEFAULT_LOGGER).error( err ?? ex ) );
+            };
+
+            const handleBeforeExit = async() =>
+            {
+                attemptSilent( () => logger.info( `The process is terminating; stopping this server` ) );
+                attempt( () => (server ?? this).stop().then( no_op ).catch( err => (this.logger ?? DEFAULT_LOGGER).error( err ) ) );
+            };
+
+            const handleExit = function( pCode )
+            {
+                const code = pCode || process.exitCode;
+                attemptSilent( () => konsole.info( "Node.js exited with code" + code ) );
+
+                if ( server.started )
+                {
+                    attempt( () => (server ?? this).stop().then( no_op ).catch( err => (this.logger ?? DEFAULT_LOGGER).error( err ) ) );
+                }
+            };
+
+            const handleUnhandledRejection = ( pReason, pPromise ) =>
+            {
+                const ex = resolveError( pReason || (new Error( "An unhandled Promise rejection occurred " + (!isBlank( asString( pReason, true ) ) ? asString( pReason ) : _mt) )), (pReason?.message || pReason) );
+                attemptSilent( () => logger.error( ex ) );
+            };
+
+            const handleWarning = ( pEvent ) =>
+            {
+                const warning = resolveError( pEvent || resolveError( new Error( pEvent?.name + ":" + pEvent?.message ), pEvent?.name ), (pEvent?.message || pEvent) );
+                let msg = (warning.name || asString( warning, true ) || "WARNING") + ", " + asString( warning.message || "(unknown)", true ) + ":\n" + (asString( warning.stack, true ) || "No Stack Trace Available") + "\n";
+                attemptSilent( () => logger.warn( msg ) );
+            };
+
+            if ( this.#eventHandlersRegistered )
+            {
+                if ( pUnregister )
+                {
+                    process.off( "uncaughtException", handleUncaughtException );
+                    process.off( "unhandledRejection", handleUnhandledRejection );
+                    process.off( "beforeExit", handleBeforeExit );
+                    process.off( "exit", handleExit );
+                    process.off( "warning", handleWarning );
+                }
+
+                return this;
+            }
+
+            /**
+             * Prevent crashing the server if some unexpected exception has not been handled
+             */
+            process.on( "uncaughtException", handleUncaughtException );
+
+            /**
+             * Executes in the case of an unhandled Promise rejection
+             */
+            process.on( "unhandledRejection", handleUnhandledRejection );
+
+            /**
+             * Opportunity to alert someone to the event that occurs right before Node exits
+             */
+            process.on( "beforeExit", handleBeforeExit );
+
+            /**
+             * The application has ended
+             */
+            process.on( "exit", handleExit );
+
+            /**
+             * Executes on receipt of a warning
+             */
+            process.on( "warning", handleWarning );
+
+            process.on( "SIGINT", () => this.stop().then( no_op ).catch( console.error ).finally( () => process.exit( EXIT_CODES.SIGINT ) ) );
+            process.on( "SIGTERM", () => this.stop().then( no_op ).catch( console.error ).finally( () => process.exit( EXIT_CODES.SIGTERM ) ) );
+
+            this.#eventHandlersRegistered = true;
+
+            return this;
+        }
+
+        #unregisterEventHandlers()
+        {
+            return this.#registerEventHandlers( true );
+        }
 
     }
+
+    const startPerformanceMonitor = function( pEntryTypes, pCallback )
+    {
+        const performanceObserver = new PerformanceObserver( pCallback );
+        performanceObserver.observe( { entryTypes: pEntryTypes } );
+        return performanceObserver;
+    };
+
+    const stopPerformanceMonitor = function( pInstance )
+    {
+        if ( isNonNullObject( pInstance ) && pInstance instanceof PerformanceObserver )
+        {
+            attempt( () => pInstance.disconnect() );
+        }
+    };
+
+    function addServerEventListeners( pHandlers )
+    {
+        const handlers = isNonNullObject( pHandlers ) ? pHandlers : {};
+
+        /**
+         * Prevent crashing the server if some unexpected exception has not been handled
+         */
+        process.on( "uncaughtException", handlers["uncaughtException"] || handleUncaughtException );
+
+        /**
+         * Executes in the case of an unhandled Promise rejection
+         */
+        process.on( "unhandledRejection", handlers["unhandledRejection"] || handleUnhandledRejection );
+
+        /**
+         * Opportunity to alert someone to the event that occurs right before Node exits
+         */
+        process.on( "beforeExit", handlers["beforeExit"] || handleBeforeExit );
+
+        /**
+         * The application has ended
+         */
+        process.on( "exit", handlers["exit"] || handleExit );
+
+        /**
+         * Executes on receipt of a warning
+         */
+        process.on( "warning", handlers["warning"] || handleWarning );
+
+        /**
+         * Executes if Node.js receives a SIGTERM or SIGINT signal
+         */
+        process.on( "disconnect", handlers["disconnect"] || handleDisconnect );
+    }
+
 
     Server.DEPENDENCIES =
         {
             ...(DependentObject.DEPENDENCIES)
         };
+
+    const runtime = new __Shared();
+
+    const mod =
+        {
+            runtime,
+            classes:
+                {
+                    ServerConfiguration,
+                    ServerFactory,
+                    Server
+                },
+            ServerFactory
+        };
+
+    if ( _ud !== typeof module )
+    {
+        module.exports = lock( mod );
+    }
+
+    return lock( mod );
 
 }());

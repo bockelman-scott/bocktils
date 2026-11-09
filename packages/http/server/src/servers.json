@@ -7,6 +7,10 @@
       "use_ssl": true,
       "key_path": "",
       "cert_path": "",
+      "parse_cookies": false,
+      "modules_base_path": "",
+      "allow_cross_origin_requests": true,
+      "compression_options": {},
       "filter_factory": {
         "module_path": "",
         "factory_class": "RequestFilterFactory"

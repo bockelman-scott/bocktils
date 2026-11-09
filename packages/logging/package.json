@@ -16,5 +16,15 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/bockelman-scott/bocktils.git"
-  }
+  },
+  "_publishes": [
+    {
+      "LOGGER": {
+        "id": "logging.logger",
+        "name": "logger",
+        "component": "SimpleLogger",
+        "path": "@toolbocks/logging"
+      }
+    }
+  ]
 }
