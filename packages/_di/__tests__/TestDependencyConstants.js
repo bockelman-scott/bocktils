@@ -23,21 +23,21 @@ describe( "Dependency Constants are Exposed", () =>
 
     test( "DEP_CONSTS_BY_ID provides lookup", () =>
     {
-        let secretsManagerConstant = DEP_CONSTS_BY_ID.get( "secrets.secretsManager" );
+        let secretsManagerConstant = DEP_CONSTS_BY_ID.get( "logging.logger" );
 
-        expect( secretsManagerConstant.id ).toEqual( "secrets.secretsManager" );
-        expect( secretsManagerConstant.name ).toEqual( "secretsManager" );
-        expect( secretsManagerConstant.description ).toEqual( "Secrets Manager for obtaining API Keys and other secrets" );
+        expect( secretsManagerConstant.id ).toEqual( "logging.logger" );
+        expect( secretsManagerConstant.name ).toEqual( "logger" );
+        expect( secretsManagerConstant.description ).toEqual( "A component for logging messages to a destination" );
 
     } );
 
     test( "DEP_CONSTS_BY_ID returns an object of class, DependencyConstant", () =>
     {
-        let secretsManagerConstant = DEP_CONSTS_BY_ID.get( "secrets.secretsManager" );
+        let secretsManagerConstant = DEP_CONSTS_BY_ID.get( "logging.logger" );
 
         expect( typeof secretsManagerConstant ).toBe( "object" );
 
-        expect( getClassName(secretsManagerConstant) ).toEqual( "DependencyConstant" );
+        expect( getClassName( secretsManagerConstant ) ).toEqual( "DependencyConstant" );
     } );
 
 

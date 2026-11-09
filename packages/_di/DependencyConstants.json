@@ -2,7 +2,7 @@
   "LOGGER": {
     "id": "logging.logger",
     "name": "logger",
-    "description": "A logger utility for logging messages to a destination"
+    "description": "A component for logging messages to a destination"
   },
   "BASE_64_ENCODER": {
     "id": "base64.encoder",

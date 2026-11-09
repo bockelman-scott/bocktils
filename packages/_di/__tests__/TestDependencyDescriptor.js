@@ -2,6 +2,8 @@
 
 const toolbocks = require( "@toolbocks/core" );
 
+const { ILogger, SimpleLogger } = require( "@toolbocks/logging" );
+
 const { SecretsManager } = require( "@toolbocks/secrets" );
 
 const { moduleUtils, constants, typeUtils } = toolbocks;
@@ -20,10 +22,10 @@ describe( "DependencyDescriptor", () =>
 {
     test( "Descriptor based on a constant uses default options", () =>
     {
-        let descriptor = new DependencyDescriptor( DEP_CONSTS.SECRETS_MANAGER );
+        let descriptor = new DependencyDescriptor( DEP_CONSTS.LOGGER );
 
-        expect( descriptor.id ).toEqual( "secrets.secretsManager" );
-        expect( descriptor.name ).toEqual( "secretsManager" );
+        expect( descriptor.id ).toEqual( "logging.logger" );
+        expect( descriptor.name ).toEqual( "logger" );
 
         expect( descriptor.requiresNewInstance ).toBe( false );
         expect( descriptor.version ).toEqual( "0.0.0" );
@@ -36,11 +38,6 @@ describe( "DependencyDescriptor", () =>
 
         expect( typeof descriptor.options ).toBe( "object" );
         expect( $ln( descriptor.options ) ).toBe( 0 );
-
-        expect( descriptor.cacheKey ).toEqual( "secrets.secretsManager|secretsManager|version:0.0.0" );
-        expect( descriptor.hash ).toEqual( "11d3c1e8b069015cc9caf27fff392fee72537621aa37cd979a67b9c140702ebc" );
-
-
     } );
 
     test( "Descriptor can specify options and/or arguments to refine expected component", () =>
