@@ -2405,16 +2405,20 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return clamp( index, minIndex, Math.max( minIndex, maxIndex ) );
     };
 
-    const ENDS_WITH = ( s ) => e => s.endsWith( e );
-    const STARTS_WITH = ( s ) => e => s.startsWith( e );
-    const CONTAINS = ( s ) => e => s.includes( e );
-    const MATCHES = ( s ) => e => isRegExp( e ) && e.test( s );
+    const ENDS_WITH = ( s ) => e => e instanceof RegExp ? e.test( s ) : s.endsWith( e );
+    const STARTS_WITH = ( s ) => e => e instanceof RegExp ? e.test( s ) : s.startsWith( e );
+    const CONTAINS = ( s ) => e => e instanceof RegExp ? e.test( s ) : s.includes( e );
+    const MATCHES = ( s ) => e => (isRegExp( e ) && e.test( s )) || e === s;
 
     const _matchesSome = function( pStr, pFilterCreator, ...pArr )
     {
         const s = asString( pStr, false );
+
         const arr = [].concat( ...(pArr || []) );
-        return arr?.length > 0 ? arr.some( pFilterCreator( s ) ) : isEmpty( s );
+
+        const predicate = pFilterCreator( s );
+
+        return arr?.length > 0 ? arr.some( predicate ) : isEmpty( s );
     };
 
     const _matchesEvery = function( pStr, pFilterCreator, ...pArr )
@@ -2438,7 +2442,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     /**
      * Returns true if the string starts with any of the character sequences in the array
      * @param {string} pStr - a string to evaluate (the caller is responsible for removing whitespace if desired)
-     * @param {...string} pArr - one or more strings with which the string might begin or regular expressions against which to test the string
+     * @param {...(string|RegExp)} pArr - one or more strings with which the string might begin or regular expressions against which to test the string
      * @returns true if the string begins with any of the character sequences in the array
      */
     const startsWithAny = function( pStr, ...pArr )
@@ -3261,6 +3265,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         if ( isString( pStr ) && !isBlank( pStr ) )
         {
             if ( pStr.length > 260 )
+            {
+                return false;
+            }
+
+            if ( !(startsWithAny( pStr, /^\.{1,2}/, /^[A-Z0-9]/i )) || pStr.startsWith(`...`) )
             {
                 return false;
             }

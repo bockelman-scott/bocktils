@@ -26,6 +26,7 @@ const
         normalizeName,
         getFunctionName,
         transliterate,
+        isFilePath,
         toLegalFileName,
         collapseWhitespace,
         toProperCase
@@ -2401,12 +2402,51 @@ describe( "isCsv", () =>
         data = `{"abc,def":"def,ghi"}` + "\n";
         expect( isCsv( data ) ).toBe( false );
 
-        data = {"abc":"def","def":"gh,i"};
+        data = { "abc": "def", "def": "gh,i" };
         expect( isCsv( data ) ).toBe( false );
 
         data = "# This is a comment, not csv data";
         expect( isCsv( data ) ).toBe( false );
 
+    } );
+
+
+} );
+
+
+describe( "isFilePath", () =>
+{
+    test( "test absolute path", () =>
+    {
+        expect( isFilePath( `C:\\Projects\\bocktils\\packages\\core\\__tests__\\StringUtils.test.js` ) ).toBe( true );
+        expect( isFilePath( `C:\\Projects` ) ).toBe( true );
+    } );
+
+    test( "test relative path", () =>
+    {
+        expect( isFilePath( `..\\packages\\core\\__tests__\\StringUtils.test.js` ) ).toBe( true );
+        expect( isFilePath( `.\\Projects` ) ).toBe( true );
+    } );
+
+    test( "test unusual paths", () =>
+    {
+        expect( isFilePath( `0001234\\StringUtils.test.js` ) ).toBe( true );
+        expect( isFilePath( `C:\\000000` ) ).toBe( true );
+    } );
+
+
+    test( "test path prefix", () =>
+    {
+        expect( isFilePath( `.` ) ).toBe( true );
+        expect( isFilePath( `..` ) ).toBe( true );
+        expect( isFilePath( `../..` ) ).toBe( true );
+        expect( isFilePath( `...` ) ).toBe( false );
+    } );
+
+    test( "test non paths", () =>
+    {
+        expect( isFilePath( `@toolbocks/core` ) ).toBe( false );
+        expect( isFilePath( `~nope` ) ).toBe( false );
     } );
 
 
