@@ -606,6 +606,11 @@
         return new Dependencies( ...(asArray( args ?? arr ?? [] )) );
     };
 
+    Dependencies.prototype.merge = function( ...pDependency )
+    {
+        return Dependencies.merge( this, ...pDependency );
+    };
+
     const INITIALIZABLE_FILTER = (( e ) => Dependency.isDependency( e ) || isComponentInitializable( e ));
     const DISPOSABLE_FILTER = (( e ) => Dependency.isDependency( e ) || isComponentDisposable( e ));
 
@@ -709,7 +714,7 @@
             this.#dependencies = [...(this.#dependenciesContainer?.inventory ?? dependencyArgs), ...dependencyArgs].filter( Dependency.isDependency );
 
             // use the DependencyConstant to retrieve the injected component
-            this.#logger = this.#dependenciesContainer.findDependency( DEP_CONSTS.LOGGER ) ??
+            this.#logger = this._findDependency( DEP_CONSTS.LOGGER ) ??
                            [...(dependencyArgs)].find( ToolBocksModule.isLogger ) ??
                            this.#options?.logger ?? DEFAULT_LOGGER;
 
@@ -758,9 +763,9 @@
                          pName = pDependencyConstant?.name,
                          pId = pDependencyConstant?.id )
         {
-            let dependency = this._dependenciesContainer.findDependency( pDependencyConstant ) ??
-                             this._dependenciesContainer.findDependency( pName ) ??
-                             this._dependenciesContainer.findDependency( pId );
+            let dependency = attemptSilent( () => this._dependenciesContainer.findDependency( pDependencyConstant ) ) ??
+                             attemptSilent( () => this._dependenciesContainer.findDependency( pName ) ) ??
+                             attemptSilent( () => this._dependenciesContainer.findDependency( pId ) );
 
             if ( Dependency.isDependency( dependency ) )
             {
