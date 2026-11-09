@@ -650,6 +650,11 @@
          */
         async init( ...pArgs )
         {
+            if ( this.initialized )
+            {
+                return this;
+            }
+
             const args = asArray( pArgs ?? [this.rootFolder, this.logger] ).concat( this.rootFolder ).concat( this.logger );
 
             const root = resolvePath( args[0] || this.rootFolder || calculateDefaultRootDirectory() );
@@ -662,7 +667,7 @@
 
             if ( this.numRegisteredComponents > 0 )
             {
-                await super.init( ...pArgs );
+                await super.init( ...args );
                 attemptSilent( () => logr.info( `${getClassName( this )} initialized with ${this.size} components` ) );
             }
             else
