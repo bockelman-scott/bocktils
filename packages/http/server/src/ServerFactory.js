@@ -549,6 +549,105 @@
 
     }
 
+    /**
+     * Acts as a singleton registry of active servers,
+     * responding to process-level events in a centralized fashion
+     *
+     * @class
+     * @singleton
+     */
+    class ServerLifecycleManager
+    {
+        static #initialized = false;
+        static #activeServers = new Set();
+
+        static register( pServer )
+        {
+            this.#activeServers.add( pServer );
+            this.#initializeProcessHooks();
+        }
+
+        static unregister( pServer )
+        {
+            this.#activeServers.delete( pServer );
+        }
+
+        static #initializeProcessHooks()
+        {
+            if ( this.#initialized )
+            {
+                return;
+            }
+
+            this.#initialized = true;
+
+            let logger = ToolBocksModule.resolveLogger( DEFAULT_LOGGER, ToolBocksModule.getGlobalLogger(), console );
+            logger = SourcedSimpleLogger.adapt( logger, "ServerLifecycleManager" );
+
+            const EXIT_CODES = lock( {
+                                         NORMAL_SHUTDOWN: 0,
+                                         UNCAUGHT_EXCEPTION: 1,
+                                         UNHANDLED_REJECTION: 2,
+                                         SIGINT: 130,
+                                         SIGTERM: 143
+                                     } );
+
+            const stopAllServers = async() =>
+            {
+                const stopPromises = [];
+
+                for( const server of this.#activeServers )
+                {
+                    stopPromises.push( server.stop().then( no_op ).catch( err => logger.error( err ) ) );
+                }
+
+                await Promise.allSettled( stopPromises );
+            };
+
+            const handleUncaughtException = ( pException, pOrigin ) =>
+            {
+                const ex = resolveError( pException || (new Error( "An uncaught exception occurred " + (!isBlank( asString( (pOrigin || pException.origin), true ) ) ? asString( (pOrigin || pException?.origin), true ) : _mt) )), pException?.message );
+                attemptSilent( () => logger.error( ex ) );
+                stopAllServers().finally( no_op );
+            };
+
+            const handleUnhandledRejection = ( pReason ) =>
+            {
+                const ex = resolveError( pReason || (new Error( "An unhandled Promise rejection occurred " + (!isBlank( asString( pReason, true ) ) ? asString( pReason ) : _mt) )), (pReason?.message || pReason) );
+                attemptSilent( () => logger.error( ex ) );
+            };
+
+            const handleBeforeExit = async() =>
+            {
+                attemptSilent( () => logger.info( `The process is terminating; stopping all registered servers` ) );
+                await stopAllServers();
+            };
+
+            const handleExit = function( pCode )
+            {
+                const code = pCode || process.exitCode;
+                attemptSilent( () => logger.info( "Node.js exited with code " + code ) );
+                // stopAllServers() is fire-and-forget here because the event loop is already unwinding
+                stopAllServers().finally( no_op );
+            };
+
+            const handleWarning = ( pEvent ) =>
+            {
+                const warning = resolveError( pEvent || resolveError( new Error( pEvent?.name + ":" + pEvent?.message ), pEvent?.name ), (pEvent?.message || pEvent) );
+                let msg = (warning.name || asString( warning, true ) || "WARNING") + ", " + asString( warning.message || "(unknown)", true ) + ":\n" + (asString( warning.stack, true ) || "No Stack Trace Available") + "\n";
+                attemptSilent( () => logger.warn( msg ) );
+            };
+
+            process.on( "uncaughtException", handleUncaughtException );
+            process.on( "unhandledRejection", handleUnhandledRejection );
+            process.on( "beforeExit", handleBeforeExit );
+            process.on( "exit", handleExit );
+            process.on( "warning", handleWarning );
+
+            process.on( "SIGINT", () => stopAllServers().finally( () => process.exit( EXIT_CODES.SIGINT ) ) );
+            process.on( "SIGTERM", () => stopAllServers().finally( () => process.exit( EXIT_CODES.SIGTERM ) ) );
+        }
+    }
 
     // noinspection DuplicatedCode
     class Server extends DependentObject
@@ -574,6 +673,8 @@
         #eventHandlersRegistered = false;
         #starting = false;
         #stopping = false;
+
+        #activeSockets = new Set();
 
         constructor( pDependencies, pOptions, ...pArgs )
         {
@@ -618,6 +719,17 @@
                                       } : {});
 
             this.#httpServer = this.#ssl ? https.createServer( serverOptions, this.#appServer ) : http.createServer( serverOptions, this.#appServer );
+
+            // Track active connections to allow forceful draining during shutdown
+            this.#httpServer.on( "connection", ( socket ) =>
+            {
+                this.#activeSockets.add( socket );
+
+                socket.on( "close", () =>
+                {
+                    this.#activeSockets.delete( socket );
+                } );
+            } );
         }
 
         get id()
@@ -723,6 +835,16 @@
             {
                 this.#stopping = true;
 
+                // Forcefully sever all active TCP connections.
+                // This guarantees the req.on("close") event fires in the HandlerFactory wrapper,
+                // aborting the signal and terminating downstream queries/integrations.
+                for( const socket of this.#activeSockets )
+                {
+                    attemptSilent( () => socket.destroy() );
+                }
+
+                this.#activeSockets.clear();
+
                 // noinspection TypeScriptUMDGlobal,JSValidateTypes
                 return new Promise( ( resolve, reject ) =>
                                     {
@@ -752,105 +874,21 @@
 
         async #registerEventHandlers( pUnregister = false )
         {
-            const server = this;
-
-            const logger = ToolBocksModule.resolveLogger( this.logger ?? DEFAULT_LOGGER, ToolBocksModule.getGlobalLogger(), console );
-
-            const EXIT_CODES =
-                lock( {
-                          NORMAL_SHUTDOWN: 0,
-                          UNCAUGHT_EXCEPTION: 1,
-                          UNHANDLED_REJECTION: 2,
-                          SIGINT: 130,
-                          SIGTERM: 143
-                      } );
-
-            const handleUncaughtException = ( pException, pOrigin ) =>
+            if ( pUnregister )
             {
-                const ex = resolveError( pException || (new Error( "An uncaught exception occurred " + (!isBlank( asString( (pOrigin || pException.origin), true ) ) ? asString( (pOrigin || pException?.origin), true ) : _mt) )), pException?.message );
-                attemptSilent( () => logger.error( ex ) );
-                return (server ?? this).stop().then( no_op ).catch( err => (this.logger ?? DEFAULT_LOGGER).error( err ?? ex ) );
-            };
-
-            const handleBeforeExit = async() =>
+                ServerLifecycleManager.unregister( this );
+            }
+            else
             {
-                attemptSilent( () => logger.info( `The process is terminating; stopping this server` ) );
-                attempt( () => (server ?? this).stop().then( no_op ).catch( err => (this.logger ?? DEFAULT_LOGGER).error( err ) ) );
-            };
-
-            const handleExit = function( pCode )
-            {
-                const code = pCode || process.exitCode;
-                attemptSilent( () => konsole.info( "Node.js exited with code" + code ) );
-
-                if ( server.started )
-                {
-                    attempt( () => (server ?? this).stop().then( no_op ).catch( err => (this.logger ?? DEFAULT_LOGGER).error( err ) ) );
-                }
-            };
-
-            const handleUnhandledRejection = ( pReason ) =>
-            {
-                const ex = resolveError( pReason || (new Error( "An unhandled Promise rejection occurred " + (!isBlank( asString( pReason, true ) ) ? asString( pReason ) : _mt) )), (pReason?.message || pReason) );
-                attemptSilent( () => logger.error( ex ) );
-            };
-
-            // noinspection DuplicatedCode
-            const handleWarning = ( pEvent ) =>
-            {
-                const warning = resolveError( pEvent || resolveError( new Error( pEvent?.name + ":" + pEvent?.message ), pEvent?.name ), (pEvent?.message || pEvent) );
-                let msg = (warning.name || asString( warning, true ) || "WARNING") + ", " + asString( warning.message || "(unknown)", true ) + ":\n" + (asString( warning.stack, true ) || "No Stack Trace Available") + "\n";
-                attemptSilent( () => logger.warn( msg ) );
-            };
-
-            if ( this.#eventHandlersRegistered )
-            {
-                if ( pUnregister )
-                {
-                    process.off( "uncaughtException", handleUncaughtException );
-                    process.off( "unhandledRejection", handleUnhandledRejection );
-                    process.off( "beforeExit", handleBeforeExit );
-                    process.off( "exit", handleExit );
-                    process.off( "warning", handleWarning );
-                }
-
-                return this;
+                ServerLifecycleManager.register( this );
             }
 
-            /**
-             * Prevent crashing the server if some unexpected exception has not been handled
-             */
-            process.on( "uncaughtException", handleUncaughtException );
-
-            /**
-             * Executes in the case of an unhandled Promise rejection
-             */
-            process.on( "unhandledRejection", handleUnhandledRejection );
-
-            /**
-             * Opportunity to alert someone to the event that occurs right before Node exits
-             */
-            process.on( "beforeExit", handleBeforeExit );
-
-            /**
-             * The application has ended
-             */
-            process.on( "exit", handleExit );
-
-            /**
-             * Executes on receipt of a warning
-             */
-            process.on( "warning", handleWarning );
-
-            process.on( "SIGINT", () => this.stop().then( no_op ).catch( console.error ).finally( () => process.exit( EXIT_CODES.SIGINT ) ) );
-            process.on( "SIGTERM", () => this.stop().then( no_op ).catch( console.error ).finally( () => process.exit( EXIT_CODES.SIGTERM ) ) );
-
-            this.#eventHandlersRegistered = true;
+            this.#eventHandlersRegistered = !pUnregister;
 
             return this;
         }
 
-        #unregisterEventHandlers()
+        async #unregisterEventHandlers()
         {
             return this.#registerEventHandlers( true );
         }
