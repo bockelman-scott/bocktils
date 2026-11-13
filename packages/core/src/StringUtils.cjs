@@ -3958,10 +3958,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         // handle some common typos
-        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,|cim|xom|com\w+|com[A-Z0-9]+)\s*$/i, ".com" );
-        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill|ymail)\.co\w+\s*$/i, "gmail.com" );
+        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,|cim|c0m|vom|xom|com\w+|com[A-Z0-9]+)\s*$/i, ".com" );
+        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill)\.co\w+\s*$/i, "gmail.com" );
+        email = asString( email, true ).replace( /(icould|iclpud)\.co\w+\s*$/i, "gmail.com" );
         email = asString( email, true ).replace( /h[oi][ty][mn][as]il\.co\w+\s*$/i, "hotmail.com" );
         email = asString( email, true ).replace( /yah+o+\.co\w+\s*$/i, "yahoo.com" );
+        email = asString( email, true ).replace( /yah0{1,3}\.co\w+\s*$/i, "yahoo.com" );
         email = asString( email, true ).replace( /@a[iop]l\.co\w+\s*$/i, "@aol.com" );
 
         // ensure we have a single @ character
