@@ -3269,7 +3269,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 return false;
             }
 
-            if ( !(startsWithAny( pStr, /^\.{1,2}/, /^[A-Z0-9]/i )) || pStr.startsWith(`...`) )
+            if ( !(startsWithAny( pStr, /^\.{1,2}/, /^[A-Z0-9]/i )) || pStr.startsWith( `...` ) )
             {
                 return false;
             }
@@ -3958,13 +3958,56 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         // handle some common typos
-        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,|cim|c0m|vom|xom|com\w+|com[A-Z0-9]+)\s*$/i, ".com" );
-        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill)\.co\w+\s*$/i, "gmail.com" );
-        email = asString( email, true ).replace( /(icould|iclpud)\.co\w+\s*$/i, "gmail.com" );
-        email = asString( email, true ).replace( /h[oi][ty][mn][as]il\.co\w+\s*$/i, "hotmail.com" );
-        email = asString( email, true ).replace( /yah+o+\.co\w+\s*$/i, "yahoo.com" );
+
+        // fix mistyped TLD (.com)
+        email = asString( email, true ).replace( /\.(comm|coom|con|col|cpm|clm|ckm|cok|coj|co,|cim|c0m|gom|vom|xom|com\w+|com[A-Z0-9]+)\s*$/i, ".com" );
+
+        // fix mistyped TLD (.net)
+        email = asString( email, true ).replace( /\.(bet|ne\w?|met)$/i, ".net" );
+
+        // fix mistyped TLD (.edu)
+        email = asString( email, true ).replace( /\.(edi)$/i, ".edu" );
+
+        // fix mistyped "gmail.com"
+        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill|gmale|gmal|gmai)\.co\w+\s*$/i, "gmail.com" );
+
+        // @gmail.fon?
+        email = asString( email, true ).replace( /@gmail.fon$/, "@gmail.com" );
+
+        // fix mistyped icloud.com
+        email = asString( email, true ).replace( /(icould|iclpud|icoud|ifloud)\.c[io]\w+\s*$/i, "icloud.com" );
+        email = asString( email, true ).replace( /(icloud|icould|iclpud|icoud|ifloud)\.net$/i, "icloud.com" );
+
+        // fix mistyped outlook.com
+        email = asString( email, true ).replace( /(outlok|oitliok|putlook)\.com$/, "outlook.com" );
+
+        // fix mistyped yahoo.com
+        email = asString( email, true ).replace( /[yt]ah+[o0]+\.co\w+\s*$/i, "yahoo.com" );
+
+        // fix other variations of a mistyped yahoo.com
         email = asString( email, true ).replace( /yah0{1,3}\.co\w+\s*$/i, "yahoo.com" );
+
+        // fix mistyped aol.com
         email = asString( email, true ).replace( /@a[iop]l\.co\w+\s*$/i, "@aol.com" );
+
+        // fix mistyped hotmail.com
+        email = asString( email, true ).replace( /h[oi][rty][mn][as]il\.co\w+\s*$/i, "hotmail.com" );
+        email = asString( email, true ).replace( /(hotmmail|hotmaail|jotmail)\.com$/i, "hotmail.com" );
+
+        // fix mistyped att.net
+        email = asString( email, true ).replace( /@[as]tt\.net\s*$/i, "@att.net" );
+
+        // fix mistyped juno.com
+        email = asString( email, true ).replace( /@jun[ip]\.co\w+\s*$/i, "@juno.com" );
+
+        // fix mistyped 'alumni' addresses
+        email = asString( email, true ).replace( /@(alumni|alumin)/i, "@alumni" );
+
+        // fix mistyped ymail.com
+        email = asString( email, true ).replace( /@ymailm.com$/i, "@ymail.com" );
+
+        // fix mistyped protonmail
+        email = asString( email, true ).replace( /@(prtoton|protn)/, "@proton" );
 
         // ensure we have a single @ character
         email = asString( email, true ).replace( /@+/, "@" );
